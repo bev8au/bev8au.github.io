@@ -31,15 +31,16 @@ const ICE = new THREE.Color('#e4ecf7');
 const TEX = `${import.meta.env.BASE_URL.replace(/\/?$/, '/')}textures/`;
 
 // Which photo maps dress each kind of world. Tints recolor greyscale or off-palette maps.
-type Surface = { map: string; tint?: string; bump?: number; night?: string; clouds?: string; normal?: string; specular?: string; atmo: string; haze: number };
+// detail (0 to 1) keeps that share of the map's fine contrast; the rest blends toward its broad colors, for a smoother look.
+type Surface = { map: string; tint?: string; detail?: number; night?: string; clouds?: string; normal?: string; specular?: string; atmo: string; haze: number };
 const SURFACE: Record<Look, Surface> = {
-	ice: { map: 'haumea.jpg', tint: '#cfe1f5', bump: 1.6, atmo: '#a9cdf5', haze: 0.5 },
+	ice: { map: 'neptune.jpg', detail: 1, atmo: '#8fb6f5', haze: 0.6 },
 	gas: { map: 'saturn.jpg', atmo: '#e8d2a8', haze: 0.25 },
 	ocean: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg', normal: 'earth_normal.jpg', specular: 'earth_specular.jpg', atmo: '#5f9cff', haze: 1.4 },
-	rust: { map: 'mars.jpg', bump: 1.4, atmo: '#e0a080', haze: 0.45 },
-	moss: { map: 'ceres.jpg', tint: '#b4c796', bump: 1.4, atmo: '#c7d6a8', haze: 0.35 },
-	moon: { map: 'moon.jpg', tint: '#e2ddd4', bump: 1.6, atmo: '#d6dbe4', haze: 0.15 },
-	amber: { map: 'ceres.jpg', tint: '#eaa266', bump: 1.2, atmo: '#f0b070', haze: 0.4 }, // basketball orange
+	rust: { map: 'mars.jpg', detail: 1, atmo: '#e0a080', haze: 0.45 },
+	moss: { map: 'venus_atmosphere.jpg', tint: '#c2dca8', detail: 1, atmo: '#c7d6a8', haze: 0.35 }, // Venus's clouds, tinted green
+	moon: { map: 'eris.jpg', detail: 1, atmo: '#d6dbe4', haze: 0.15 },
+	amber: { map: 'jupiter.jpg', detail: 1, atmo: '#f0b070', haze: 0.4 }, // basketball orange
 };
 
 // ---------- CPU noise, used to shape rocks ----------
@@ -135,7 +136,7 @@ const SCREEN_VERTEX = /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_P
 // All lighting is in view space. One light: the star at uSunView.
 const PLANET_FRAGMENT = /* glsl */ `
 	uniform sampler2D uDay, uNight, uClouds, uNormal, uSpec, uRingTex;
-	uniform float uHasNight, uHasClouds, uHasNormal, uHasSpec, uBump, uHasRing, uRingIn, uRingOut, uTime;
+	uniform float uHasNight, uHasClouds, uHasNormal, uHasSpec, uDetail, uHasRing, uRingIn, uRingOut, uTime;
 	uniform vec3 uTint, uSunView, uRingCenter, uRingNormal, uAtmo;
 	uniform vec4 uOcc[MAX_OCC];
 	uniform int uOccCount, uSelf;
@@ -153,17 +154,6 @@ const PLANET_FRAGMENT = /* glsl */ `
 		float det = max(dot(T, T), dot(B, B));
 		float s = det == 0.0 ? 0.0 : inversesqrt(det);
 		return normalize(T * (mapN.x * s) + B * (mapN.y * s) + n * mapN.z);
-	}
-
-	// Bump from the color map's brightness, for worlds without a normal map
-	vec3 bumpNormal(vec3 p, vec3 n, vec2 uv) {
-		float h = lum(texture2D(uDay, uv).rgb);
-		vec2 dH = vec2(lum(texture2D(uDay, uv + dFdx(uv)).rgb) - h, lum(texture2D(uDay, uv + dFdy(uv)).rgb) - h) * uBump;
-		vec3 sx = dFdx(p), sy = dFdy(p);
-		vec3 r1 = cross(sy, n), r2 = cross(n, sx);
-		float det = dot(sx, r1);
-		vec3 grad = sign(det) * (dH.x * r1 + dH.y * r2);
-		return normalize(abs(det) * n - grad);
 	}
 
 	// Soft shadows from other planets and from a ring plane, along the ray to the star
@@ -200,9 +190,9 @@ const PLANET_FRAGMENT = /* glsl */ `
 		vec3 L = normalize(uSunView - vViewPos);
 		float toSun = length(uSunView - vViewPos);
 		if (uHasNormal > 0.5) N = perturbNormal(vViewPos, Ng, texture2D(uNormal, vUv).xyz * 2.0 - 1.0, vUv);
-		else if (uBump > 0.0) N = bumpNormal(vViewPos, Ng, vUv);
 
-		vec3 albedo = texture2D(uDay, vUv).rgb * uTint;
+		// A heavily biased lookup reads a small mip: the surface's broad colors, which the fine detail blends toward
+		vec3 albedo = mix(texture2D(uDay, vUv, 5.0).rgb, texture2D(uDay, vUv).rgb, uDetail) * uTint;
 		float day = dot(Ng, L);
 		float shadow = shadowAt(vViewPos, L, toSun);
 
@@ -213,8 +203,9 @@ const PLANET_FRAGMENT = /* glsl */ `
 			albedo *= 1.0 - texture2D(uClouds, cuv + vec2(0.004, -0.002)).r * 0.4; // cloud shadows on the ground
 		}
 
-		vec3 col = albedo * max(dot(N, L), 0.0) * shadow * 1.2;
-		col = mix(col, vec3(0.95) * max(day, 0.0) * shadow * 1.2, cloud * 0.92);
+		// A soft S-curve instead of a hard cutoff, so the terminator fades rather than drawing a line across smooth worlds
+		vec3 col = albedo * smoothstep(-0.12, 1.0, dot(N, L)) * shadow * 1.2;
+		col = mix(col, vec3(0.95) * smoothstep(-0.12, 1.0, day) * shadow * 1.2, cloud * 0.92);
 
 		// Sun glint on water
 		if (uHasSpec > 0.5) {
@@ -459,7 +450,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 				uHasClouds: { value: surf.clouds ? 1 : 0 },
 				uHasNormal: { value: surf.normal ? 1 : 0 },
 				uHasSpec: { value: surf.specular ? 1 : 0 },
-				uBump: { value: surf.bump ?? 0 },
+				uDetail: { value: surf.detail ?? 1 },
 				uHasRing: { value: s.look === 'gas' ? 1 : 0 },
 				uRingIn: { value: inner },
 				uRingOut: { value: outer },
