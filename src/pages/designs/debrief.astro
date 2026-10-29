@@ -1,0 +1,1072 @@
+---
+// Design D: Mission debrief. Projects orbit a home star on a tactical plot; orbit radius is the launch year.
+// Clicking a target locks on and swaps the debrief panel. Motion language borrowed from 2Advanced V3.
+const sorties = [
+	{
+		id: 'MLU-05', name: 'Lantern', kind: 'Research', year: 2026, phase: 0.6, status: 'flight', look: 'ice', size: 0.55,
+		objective: 'Find near-Earth asteroid streaks in wide-field survey frames before a human has to look at them.',
+		outcome: 'A streak classifier at 94% recall on held-out nights. The detection pipeline goes to the group review in December.',
+		stack: 'Python, PyTorch, Astropy', crew: 'Me + 3, Dept. of Astronomy', duration: '9 months and counting',
+	},
+	{
+		id: 'MLU-04', name: 'Orrery', kind: 'Simulation', year: 2025, phase: 3.7, status: 'complete', look: 'gas', size: 0.85,
+		objective: 'Run a real n-body solar system in the browser at 60 frames per second.',
+		outcome: 'Barnes-Hut on WebGPU holds 50,000 bodies at 60 fps on a laptop. Jupiter still eats a comet every few minutes.',
+		stack: 'Rust, WASM, WebGPU', crew: 'Solo', duration: '4 months',
+	},
+	{
+		id: 'MLU-03', name: "Hoo's Free", kind: 'Web app', year: 2025, phase: 1.4, status: 'flight', look: 'ocean', size: 0.5,
+		objective: 'Find an empty study room on Grounds without walking every floor of the library.',
+		outcome: 'Scrapes the booking system every five minutes. About 1,100 people use it each week during finals.',
+		stack: 'Python, FastAPI, Svelte', crew: 'Me + 1', duration: 'Live since Feb 2025',
+	},
+	{
+		id: 'MLU-02', name: 'beatbox', kind: 'Game', year: 2024, phase: 4.9, status: 'complete', look: 'rust', size: 0.42,
+		objective: 'Turn any MP3 into a playable four-lane rhythm chart, right in the browser.',
+		outcome: 'Beat detection builds a chart in about two seconds. 400 players showed up after one Reddit post.',
+		stack: 'TypeScript, Web Audio API', crew: 'Solo', duration: '6 weeks',
+	},
+	{
+		id: 'MLU-01', name: 'Plant Pager', kind: 'Hardware', year: 2023, phase: 2.2, status: 'complete', look: 'moss', size: 0.36,
+		objective: 'Keep one basil plant alive through a semester of late nights.',
+		outcome: 'An ESP32 soil sensor texts me below 30% moisture. The basil has been saved twice.',
+		stack: 'C++, ESP32, Twilio', crew: 'Solo, plus basil', duration: '3 weekends',
+	},
+];
+const statusText = { flight: 'In flight', complete: 'Complete' };
+
+const log = [
+	{ date: '2023.08', text: 'Launched. Started a BS in Computer Science at the University of Virginia.' },
+	{ date: '2024.06', text: 'Software intern at Blue Ridge Robotics. Wrote the telemetry dashboard for their field rovers.' },
+	{ date: '2025.01', text: 'Teaching assistant for CS 2100, Data Structures and Algorithms.' },
+	{ date: '2025.09', text: 'Joined the Lantern asteroid-detection group in the Department of Astronomy.' },
+	{ date: '2026.05', text: 'Flight software intern at Ridgeline Aerospace, on the cubesat ground station team.' },
+];
+
+const commits = [
+	{ m: 'Jan', n: 84 }, { m: 'Feb', n: 132 }, { m: 'Mar', n: 158 }, { m: 'Apr', n: 121 }, { m: 'May', n: 96 },
+	{ m: 'Jun', n: 143 }, { m: 'Jul', n: 171 }, { m: 'Aug', n: 112 }, { m: 'Sep', n: 139 }, { m: 'Oct', n: 128 },
+];
+const maxCommits = Math.max(...commits.map((c) => c.n));
+const totalCommits = commits.reduce((s, c) => s + c.n, 0);
+const langs = [
+	{ name: 'Python', pct: 38 }, { name: 'TypeScript', pct: 27 }, { name: 'Rust', pct: 18 }, { name: 'C++', pct: 11 }, { name: 'Other', pct: 6 },
+];
+
+const tabs = [
+	{ href: '#debrief', label: 'Debrief' },
+	{ href: '#sorties', label: 'Sorties' },
+	{ href: '#log', label: 'Flight log' },
+	{ href: '#dossier', label: 'Dossier' },
+	{ href: '#uplink', label: 'Uplink' },
+];
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<title>Martin Liu</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet" />
+		<script is:inline>
+			// Land on the full-screen solar system unless the URL already names a page
+			if (!/^#(debrief|sorties|log|dossier|uplink)$/.test(location.hash)) document.documentElement.classList.add('immersive');
+			// Boot sequence plays once per session, and never with reduced motion.
+			try {
+				if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !sessionStorage.getItem('debrief-booted')) {
+					document.documentElement.classList.add('boot');
+					sessionStorage.setItem('debrief-booted', '1');
+				}
+			} catch (e) {}
+		</script>
+	</head>
+	<body>
+		<div class="loader" aria-hidden="true">
+			<svg viewBox="0 0 60 60" class="ring">
+				<circle cx="30" cy="30" r="24" />
+				<path d="M30 6 A24 24 0 0 1 54 30" />
+				<circle class="core" cx="30" cy="30" r="5" />
+			</svg>
+			<p>Initializing debrief</p>
+		</div>
+
+		<div class="chassis">
+			<header class="plate" data-boot style="--i:0">
+				<a class="mark" href="#debrief" aria-label="Martin Liu, back to top">
+					<svg viewBox="0 0 40 40" aria-hidden="true">
+						<ellipse cx="20" cy="20" rx="17" ry="7" transform="rotate(-24 20 20)" />
+						<circle cx="20" cy="20" r="6" />
+						<circle class="moon" cx="35" cy="13" r="2.4" />
+					</svg>
+					<span class="wordmark">Martin Liu</span>
+				</a>
+				<p class="callsign">Survey vessel UVA/CS <span class="sep">//</span> <time class="clock">--:--:-- UTC</time></p>
+			</header>
+
+			<nav class="tabs" aria-label="Sections" data-boot style="--i:1">
+				{tabs.map((t, i) => <a href={t.href} class:list={{ on: i === 0 }}>{t.label}</a>)}
+			</nav>
+
+			<main>
+				<section id="debrief" class="viewport" aria-label="Tactical plot of projects" data-boot style="--i:2">
+					<div class="plot">
+						<header class="immersive-bar">
+							<a class="mark" href="#debrief" aria-label="Martin Liu, open the debrief">
+								<svg viewBox="0 0 40 40" aria-hidden="true">
+									<ellipse cx="20" cy="20" rx="17" ry="7" transform="rotate(-24 20 20)" />
+									<circle cx="20" cy="20" r="6" />
+									<circle class="moon" cx="35" cy="13" r="2.4" />
+								</svg>
+								<span class="wordmark">Martin Liu</span>
+							</a>
+							<nav class="immersive-nav" aria-label="Pages">
+								{tabs.map((t) => <a href={t.href}>{t.label}</a>)}
+							</nav>
+						</header>
+						<p class="immersive-hint" aria-hidden="true">Drag to look around, scroll to zoom. Pick a planet to open its debrief.</p>
+						<button class="full-view" type="button" aria-label="Return to the full-screen view">
+							<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4" /></svg>
+							Full view
+						</button>
+						<div class="marks" aria-hidden="true">
+							{['2023', '2024', '2025', '2026'].map((y) => <span class="yr" data-key={y}>'{y.slice(2)}</span>)}
+							<span class="yr belt" data-key="belt">Coursework belt</span>
+						</div>
+						<div class="hud tl" aria-hidden="true">
+							<p class="hud-title">Tactical plot</p>
+							<p>Orbit radius marks launch year</p>
+						</div>
+						<div class="hud bl" aria-hidden="true">
+							<p><span class="key complete"></span>Complete</p>
+							<p><span class="key flight"></span>In flight</p>
+						</div>
+						<div class="hud br" aria-hidden="true">
+							<p>Tracking {sorties.length} objects</p>
+						</div>
+						<ul class="targets" aria-label="Sorties on the plot">
+							{sorties.map((s) => (
+								<li>
+									<button class:list={['target', s.status]} type="button" data-id={s.id} aria-label={`${s.id}, ${s.name}. Show debrief`}>
+										<span class="marker"></span>
+										<span class="brackets"></span>
+										<span class="tag"><i class="glyph"></i><b>{s.id}</b> {s.name}</span>
+									</button>
+								</li>
+							))}
+						</ul>
+					</div>
+
+					<aside class="debrief empty" aria-live="polite">
+						<div class="debrief-bar">
+							<span class="badge">D</span>
+							<span>Sortie debrief</span>
+						</div>
+						<div class="debrief-body">
+							<div class="empty-note">
+								<p class="empty-title">No sortie selected</p>
+								<p>Pick a planet on the plot, or a row in the sortie register, to read its debrief.</p>
+							</div>
+							<div class="debrief-head">
+								<span class="desig" data-f="id"></span>
+								<span class="status" data-f="status"></span>
+							</div>
+							<h1 class="sortie-name" data-f="name"></h1>
+							<p class="sortie-kind" data-f="kind"></p>
+							<dl class="brief">
+								<dt>Objective</dt><dd data-f="objective"></dd>
+								<dt>Outcome</dt><dd data-f="outcome"></dd>
+							</dl>
+							<dl class="kv">
+								<div><dt>Stack</dt><dd data-f="stack"></dd></div>
+								<div><dt>Crew</dt><dd data-f="crew"></dd></div>
+								<div><dt>Duration</dt><dd data-f="duration"></dd></div>
+							</dl>
+							<a class="cta" href="https://github.com/bev8au"><span class="cta-gauge" aria-hidden="true"></span>Read the full report on GitHub</a>
+						</div>
+						<span class="wipe" aria-hidden="true"></span>
+					</aside>
+				</section>
+
+				<div class="strip" data-boot style="--i:3">
+					<a href="#sorties">Scroll for the full debrief</a>
+					<p>Drag to look around, Ctrl + scroll to zoom, double-click to reset</p>
+				</div>
+
+				<div class="trio">
+					<section id="log" class="panel" aria-labelledby="log-title" data-boot style="--i:4">
+						<h2 class="panel-bar" id="log-title"><span class="badge">L</span>Flight log</h2>
+						<ol class="log">
+							{log.map((e) => (
+								<li><time>{e.date}</time><p>{e.text}</p></li>
+							))}
+						</ol>
+					</section>
+
+					<section class="panel" aria-labelledby="tel-title" data-boot style="--i:5">
+						<h2 class="panel-bar" id="tel-title"><span class="badge">T</span>Telemetry</h2>
+						<div class="tel">
+							<p class="reading"><span class="big">{totalCommits.toLocaleString('en-US')}</span> commits in 2026</p>
+							<ol class="bars" aria-label="Commits per month, January to October 2026">
+								{commits.map((c) => (
+									<li style={`--h:${c.n / maxCommits}`} title={`${c.m}: ${c.n}`}>
+										<span class="bar"></span>
+										<span class="m">{c.m.slice(0, 1)}</span>
+									</li>
+								))}
+							</ol>
+							<p class="sub">Languages by lines written</p>
+							<div class="mix" role="img" aria-label={langs.map((l) => `${l.name} ${l.pct}%`).join(', ')}>
+								{langs.map((l) => <span style={`--w:${l.pct}`}></span>)}
+							</div>
+							<ul class="mix-key">
+								{langs.map((l) => <li><span class="n">{l.pct}%</span> {l.name}</li>)}
+							</ul>
+						</div>
+					</section>
+
+					<section class="panel" aria-labelledby="comms-title" data-boot style="--i:6">
+						<h2 class="panel-bar" id="comms-title"><span class="badge">C</span>Comms</h2>
+						<ul class="comms">
+							<li><b>Now</b> Finishing Lantern's detection pipeline for the December review.</li>
+							<li><b>Seeking</b> Summer 2027 internships in systems, graphics, or flight software.</li>
+							<li><b>Reading</b> <cite>Real-Time Collision Detection</cite>, slowly.</li>
+						</ul>
+					</section>
+				</div>
+
+				<section id="sorties" class="panel register" aria-labelledby="reg-title" data-boot style="--i:7">
+					<h2 class="panel-bar" id="reg-title"><span class="badge">S</span>Sortie register</h2>
+					<div class="reg-head" aria-hidden="true">
+						<span>Designation</span><span>Sortie</span><span>Class</span><span>Launched</span><span>Status</span>
+					</div>
+					<ul class="reg">
+						{sorties.map((s) => (
+							<li>
+								<button type="button" class="reg-row" data-id={s.id}>
+									<span class="r-id">{s.id}</span>
+									<span class="r-name">{s.name}</span>
+									<span class="r-kind">{s.kind}</span>
+									<span class="r-year">{s.year}</span>
+									<span class:list={['r-status', s.status]}>{statusText[s.status]}</span>
+								</button>
+							</li>
+						))}
+					</ul>
+				</section>
+
+				<div class="duo" data-boot style="--i:8">
+					<section id="dossier" class="panel" aria-labelledby="dossier-title">
+						<h2 class="panel-bar" id="dossier-title"><span class="badge">P</span>Pilot dossier</h2>
+						<div class="dossier">
+							<p class="lede">I study computer science at UVA and build software that has to work under pressure: simulations, sensor pipelines, and tools people open during finals week.</p>
+							<p>Most of my time goes to the Lantern group, teaching people to love linked lists, and pointing a small telescope at things from the roof of my building.</p>
+							<dl class="kv">
+								<div><dt>Callsign</dt><dd>bev8au</dd></div>
+								<div><dt>Home base</dt><dd>Charlottesville, VA</dd></div>
+								<div><dt>Program</dt><dd>BS Computer Science, class of 2027</dd></div>
+								<div><dt>Specialty</dt><dd>Systems, graphics, scientific computing</dd></div>
+							</dl>
+						</div>
+					</section>
+
+					<section id="uplink" class="panel" aria-labelledby="uplink-title">
+						<h2 class="panel-bar" id="uplink-title"><span class="badge">U</span>Uplink</h2>
+						<div class="uplink">
+							<p>Email is the fastest channel. I answer within a day.</p>
+							<a class="cta" href="mailto:bev8au@virginia.edu"><span class="cta-gauge" aria-hidden="true"></span>Email Martin</a>
+							<a class="cta" href="https://github.com/bev8au"><span class="cta-gauge" aria-hidden="true"></span>See code on GitHub</a>
+							<a class="cta" href="#"><span class="cta-gauge" aria-hidden="true"></span>Download résumé (PDF)</a>
+						</div>
+					</section>
+				</div>
+			</main>
+
+			<footer class="foot" data-boot style="--i:9">
+				<p>© 2026 Martin Liu</p>
+				<p>Built with Astro <span class="sep">//</span> Hosted on GitHub Pages</p>
+				<p class="credit">Planet and sky textures by <a href="https://www.solarsystemscope.com/textures/">Solar System Scope</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Planet surfaces recolored.</p>
+			</footer>
+		</div>
+
+		<script type="application/json" id="sortie-data" set:html={JSON.stringify(sorties.map((s) => ({ ...s, statusText: statusText[s.status] })))} />
+
+		<script>
+			import { createPlot, type Look } from '../../scripts/debrief-plot';
+
+			type Sortie = {
+				id: string; name: string; kind: string; year: number; phase: number; status: string; statusText: string;
+				look: Look; size: number; objective: string; outcome: string; stack: string; crew: string; duration: string;
+			};
+			const sorties: Sortie[] = JSON.parse(document.getElementById('sortie-data')!.textContent!);
+			const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+			let current = '';
+
+			// ---------- Tactical plot: three.js scene, HTML targets track it ----------
+			const plot = document.querySelector<HTMLElement>('.plot')!;
+			const targetsLayer = plot.querySelector<HTMLElement>('.targets')!;
+			const buttons = new Map<string, HTMLButtonElement>();
+			targetsLayer.querySelectorAll<HTMLButtonElement>('.target').forEach((b) => buttons.set(b.dataset.id!, b));
+			const marks = new Map<string, HTMLElement>();
+			plot.querySelectorAll<HTMLElement>('.yr').forEach((m) => marks.set(m.dataset.key!, m));
+
+			const scene = createPlot(plot, sorties, {
+				reduced,
+				zoomNeedsModifier: () => !document.documentElement.classList.contains('immersive'),
+				onFrame(bodies, labels) {
+					const w = plot.clientWidth;
+					for (const b of bodies) {
+						const btn = buttons.get(b.key)!;
+						btn.style.transform = `translate(${b.x}px, ${b.y}px)`;
+						btn.style.setProperty('--r', `${Math.max(b.r, 6)}px`);
+						btn.classList.toggle('flip', b.x > w * 0.6);
+					}
+					for (const l of labels) marks.get(l.key)!.style.transform = `translate(${l.x}px, ${l.y}px)`;
+				},
+			});
+
+			// Hold the planets still while a pointer or keyboard is on a target
+			targetsLayer.addEventListener('pointerover', (e) => { if ((e.target as Element).closest('.target')) scene.setPaused(true); });
+			targetsLayer.addEventListener('pointerout', () => scene.setPaused(false));
+			targetsLayer.addEventListener('focusin', () => scene.setPaused(true));
+			targetsLayer.addEventListener('focusout', () => scene.setPaused(false));
+
+			// ---------- Debrief panel ----------
+			const panel = document.querySelector<HTMLElement>('.debrief')!;
+			const fields = panel.querySelectorAll<HTMLElement>('[data-f]');
+
+			function fill(s: Sortie) {
+				fields.forEach((el) => {
+					const f = el.dataset.f!;
+					if (f === 'status') {
+						el.textContent = s.statusText;
+						el.className = `status ${s.status}`;
+					} else if (f === 'kind') {
+						el.textContent = `${s.kind}, launched ${s.year}`;
+					} else {
+						el.textContent = (s as any)[f];
+					}
+				});
+			}
+
+			function select(id: string) {
+				if (id === current) return;
+				const s = sorties.find((x) => x.id === id);
+				if (!s) return;
+				const first = !current;
+				current = id;
+				panel.classList.remove('empty');
+				scene.focus(id);
+				// The camera glides toward the target first, then the brackets snap on
+				buttons.forEach((b) => b.classList.remove('locked'));
+				const lock = () => { if (current === id) buttons.get(id)!.classList.add('locked'); };
+				if (reduced) lock();
+				else setTimeout(lock, 650);
+				document.querySelectorAll<HTMLButtonElement>('.reg-row').forEach((r) => r.setAttribute('aria-pressed', String(r.dataset.id === id)));
+				if (first || reduced) return fill(s);
+				panel.classList.remove('swap');
+				void panel.offsetWidth;
+				panel.classList.add('swap');
+				setTimeout(() => fill(s), 190);
+			}
+
+			buttons.forEach((b) => b.addEventListener('click', () => {
+				select(b.dataset.id!);
+				if (root.classList.contains('immersive')) location.hash = 'debrief';
+			}));
+			document.querySelectorAll<HTMLButtonElement>('.reg-row').forEach((r) =>
+				r.addEventListener('click', () => {
+					select(r.dataset.id!);
+					document.getElementById('debrief')!.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+				}),
+			);
+
+			// ---------- Full view and the console ----------
+			// The page lands on the full-screen solar system; the blue console powers on once a page is chosen.
+			// Each page is a hash, so the browser's Back button returns to the full view.
+			const root = document.documentElement;
+			const PAGES = ['debrief', 'sorties', 'log', 'dossier', 'uplink'];
+
+			function openConsole(page: string) {
+				if (!root.classList.contains('immersive')) return; // already open: the anchor scrolls as usual
+				root.classList.remove('immersive');
+				if (!reduced) {
+					root.classList.remove('opening');
+					void root.offsetWidth;
+					root.classList.add('opening');
+					setTimeout(() => root.classList.remove('opening'), 1600);
+				}
+				// Scrolling forces layout, so the console is already in place
+				if (page === 'debrief') scrollTo({ top: 0, behavior: 'instant' });
+				else document.getElementById(page)!.scrollIntoView({ behavior: 'instant', block: 'start' });
+			}
+
+			function closeConsole() {
+				if (root.classList.contains('immersive')) return;
+				root.classList.add('immersive');
+				scrollTo({ top: 0, behavior: 'instant' });
+				if (!reduced) plot.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, easing: 'ease-out' });
+			}
+
+			function goFullView() {
+				if (location.hash) history.pushState(null, '', location.pathname + location.search);
+				closeConsole();
+			}
+
+			addEventListener('hashchange', () => {
+				const page = location.hash.slice(1);
+				if (PAGES.includes(page)) openConsole(page);
+				else closeConsole();
+			});
+			addEventListener('popstate', () => { if (!location.hash) closeConsole(); });
+			plot.querySelector('.full-view')!.addEventListener('click', goFullView);
+			addEventListener('keydown', (e) => { if (e.key === 'Escape' && !root.classList.contains('immersive')) goFullView(); });
+			// Let the first-visit boot finish, then drop its long delays so later openings use their own timing
+			if (root.classList.contains('boot')) setTimeout(() => root.classList.remove('boot'), 2800);
+
+			// ---------- Clock and tab state ----------
+			const clock = document.querySelector('.clock')!;
+			const tick = () => { clock.textContent = new Date().toISOString().slice(11, 19) + ' UTC'; };
+			tick();
+			setInterval(tick, 1000);
+
+			const tabLinks = [...document.querySelectorAll<HTMLAnchorElement>('.tabs a')];
+			const spy = new IntersectionObserver(
+				(entries) => entries.forEach((e) => {
+					if (!e.isIntersecting) return;
+					tabLinks.forEach((a) => a.classList.toggle('on', a.hash === `#${e.target.id}`));
+				}),
+				{ rootMargin: '-40% 0px -55% 0px' },
+			);
+			tabLinks.forEach((a) => { const t = document.querySelector(a.hash); if (t) spy.observe(t); });
+		</script>
+
+		<style is:global>
+			:root {
+				--void: #141c30;
+				--hull: #283652;
+				--hull-hi: #33446a;
+				--hull-lo: #1d2840;
+				--plate: #7a8db0;
+				--plate-hi: #a7b6d1;
+				--ice: #e4ecf7;
+				--dim: #93a3c0;
+				--amber: #f2b13b;
+				--line: rgba(196, 212, 238, 0.16);
+				--display: 'Michroma', 'Eurostile', sans-serif;
+				--body: 'Barlow', system-ui, sans-serif;
+				--data: 'Barlow Condensed', 'Barlow', sans-serif;
+				color-scheme: dark;
+			}
+			* { box-sizing: border-box; }
+			html { scroll-behavior: smooth; scroll-padding-top: 12px; }
+			@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+			body {
+				margin: 0;
+				background-color: var(--void);
+				/* Dot-grid gutters, fading toward the bottom like the 2A frame */
+				background-image:
+					radial-gradient(rgba(147, 163, 192, 0.28) 1px, transparent 1.2px),
+					linear-gradient(180deg, #2a3958 0%, var(--void) 70%);
+				background-size: 6px 6px, 100% 100%;
+				color: var(--ice);
+				font: 400 1rem/1.55 var(--body);
+				-webkit-font-smoothing: antialiased;
+			}
+			a { color: inherit; }
+			:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+			p, h1, h2, ol, ul, dl, dd { margin: 0; padding: 0; }
+			ol, ul { list-style: none; }
+
+			.chassis {
+				max-width: 1240px;
+				margin: 0 auto;
+				background: var(--hull);
+				border-inline: 1px solid rgba(167, 182, 209, 0.35);
+				box-shadow: 0 0 0 6px rgba(20, 28, 48, 0.6), 0 30px 80px rgba(5, 8, 16, 0.6);
+				min-height: 100vh;
+				padding-bottom: 8px;
+			}
+
+			/* ---------- Header plate ---------- */
+			.plate {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 16px;
+				flex-wrap: wrap;
+				padding: 22px 24px 18px;
+				background:
+					repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 4px),
+					linear-gradient(180deg, var(--plate-hi), var(--plate));
+				border-bottom: 1px solid #56688c;
+				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+			}
+			.mark { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #fff; }
+			.mark svg { width: 40px; height: 40px; fill: none; stroke: #fff; stroke-width: 2; filter: drop-shadow(0 1px 0 rgba(30, 40, 64, 0.5)); }
+			.mark svg circle { fill: #fff; stroke: none; }
+			.mark .moon { fill: var(--amber); }
+			.wordmark {
+				font: 400 clamp(1.05rem, 2.4vw, 1.5rem)/1 var(--display);
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+				text-shadow: 0 1px 0 rgba(30, 40, 64, 0.55);
+			}
+			.callsign {
+				font: 600 0.9rem/1 var(--data);
+				letter-spacing: 0.06em;
+				color: #1f2b46;
+				font-variant-numeric: tabular-nums;
+			}
+			.sep { opacity: 0.55; margin-inline: 4px; }
+
+			/* ---------- Tab strip ---------- */
+			.tabs {
+				display: grid;
+				grid-template-columns: repeat(5, 1fr);
+				margin: 8px 8px 0;
+				background: var(--hull-lo);
+				border: 1px solid #44567c;
+			}
+			.tabs a {
+				position: relative;
+				padding: 10px 6px 9px;
+				text-align: center;
+				text-decoration: none;
+				font: 400 0.68rem/1.2 var(--display);
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				color: var(--dim);
+				background: linear-gradient(180deg, #2e3d5e, #243150);
+				border-left: 1px solid #44567c;
+				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+			}
+			.tabs a:first-child { border-left: 0; }
+			.tabs a:hover { color: var(--ice); }
+			.tabs a.on { color: #fff; background: linear-gradient(180deg, #4a5d86, #34466c); }
+			.tabs a.on::after {
+				content: '';
+				position: absolute;
+				left: 50%; bottom: -1px;
+				width: 28px; height: 2px;
+				translate: -50% 0;
+				background: var(--amber);
+			}
+
+			/* ---------- Viewport: plot + debrief ---------- */
+			.viewport {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) 360px;
+				margin: 8px;
+				border: 1px solid #4d6088;
+				background: var(--hull-lo);
+				box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+			}
+			.plot {
+				position: relative;
+				height: clamp(400px, 62vh, 580px);
+				overflow: hidden;
+				background:
+					radial-gradient(ellipse 70% 60% at 50% 53%, #22305080 0%, transparent 70%),
+					linear-gradient(180deg, #17203a, #121a2e);
+			}
+			.plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+			/* Drag orbits the camera; on touch, horizontal drags orbit and vertical swipes still scroll the page */
+			.plot { cursor: grab; touch-action: pan-y; user-select: none; }
+			.plot.dragging { cursor: grabbing; }
+			.plot.dragging .target { pointer-events: none; }
+			.hud {
+				position: absolute;
+				font: 500 0.78rem/1.4 var(--data);
+				letter-spacing: 0.04em;
+				color: var(--dim);
+				pointer-events: none;
+			}
+			.hud.tl { top: 14px; left: 16px; }
+			.hud.bl { bottom: 12px; left: 16px; display: flex; gap: 14px; }
+			.hud.br { bottom: 12px; right: 16px; }
+			.hud-title { font: 400 0.66rem/1.6 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ice); }
+			.key { display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 0; }
+			.key.complete { border: 1.5px solid var(--ice); border-radius: 50%; }
+			.key.flight { background: var(--amber); rotate: 45deg; }
+
+			.targets, .marks { position: absolute; inset: 0; pointer-events: none; }
+			.yr {
+				position: absolute;
+				left: 0; top: 0;
+				margin-top: -0.65em;
+				font: 600 0.72rem/1.3 var(--data);
+				letter-spacing: 0.04em;
+				color: rgba(228, 236, 247, 0.55);
+				will-change: transform;
+			}
+			.yr.belt { font-weight: 500; margin-left: -3.2em; color: rgba(228, 236, 247, 0.4); }
+			/* Hit area hugs the rendered planet: --r is its projected radius in px */
+			.target {
+				--pad: 8px;
+				position: absolute;
+				left: 0; top: 0;
+				width: calc(var(--r, 8px) * 2 + var(--pad) * 2);
+				height: calc(var(--r, 8px) * 2 + var(--pad) * 2);
+				margin: calc(-1 * (var(--r, 8px) + var(--pad))) 0 0 calc(-1 * (var(--r, 8px) + var(--pad)));
+				padding: 0;
+				border: 0;
+				background: none;
+				color: var(--ice);
+				cursor: crosshair;
+				pointer-events: auto;
+				will-change: transform;
+			}
+			.marker {
+				position: absolute;
+				inset: 3px;
+				border: 1px dashed rgba(228, 236, 247, 0.55);
+				border-radius: 50%;
+				opacity: 0;
+				transition: opacity 0.15s;
+			}
+			.target:hover .marker, .target:focus-visible .marker { opacity: 1; }
+			.tag {
+				position: absolute;
+				left: calc(100% - 4px); bottom: calc(100% - 10px);
+				white-space: nowrap;
+				padding: 1px 7px 1px 6px;
+				font: 500 0.8rem/1.3 var(--data);
+				letter-spacing: 0.03em;
+				background: rgba(12, 17, 30, 0.62);
+				border-left: 1px solid var(--line);
+				backdrop-filter: blur(2px);
+			}
+			.glyph { display: inline-block; width: 6px; height: 6px; margin-right: 6px; vertical-align: 1px; border: 1.5px solid var(--ice); border-radius: 50%; }
+			.target.flight .glyph { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; }
+			.tag b { font-weight: 600; color: var(--dim); margin-right: 3px; }
+			/* Targets on the right side of the plot put their tag on the left so it never clips */
+			.target.flip .tag { left: auto; right: calc(100% - 4px); border-left: 0; border-right: 1px solid var(--line); }
+			.target:hover .tag, .target:focus-visible .tag { background: rgba(74, 93, 134, 0.7); }
+			.target:focus-visible { outline: none; }
+			.target:focus-visible .marker { border: 2px solid var(--amber); }
+			.brackets {
+				position: absolute;
+				inset: 0;
+				opacity: 0;
+				--c: var(--amber);
+				background:
+					linear-gradient(var(--c), var(--c)) top left / 9px 2px,
+					linear-gradient(var(--c), var(--c)) top left / 2px 9px,
+					linear-gradient(var(--c), var(--c)) top right / 9px 2px,
+					linear-gradient(var(--c), var(--c)) top right / 2px 9px,
+					linear-gradient(var(--c), var(--c)) bottom left / 9px 2px,
+					linear-gradient(var(--c), var(--c)) bottom left / 2px 9px,
+					linear-gradient(var(--c), var(--c)) bottom right / 9px 2px,
+					linear-gradient(var(--c), var(--c)) bottom right / 2px 9px;
+				background-repeat: no-repeat;
+			}
+			.target.locked .brackets { opacity: 1; animation: lock 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+			.target.locked .tag { color: #fff; border-left-color: var(--amber); border-right-color: var(--amber); }
+			.target.locked .tag b { color: var(--amber); }
+			@keyframes lock {
+				0% { opacity: 0; transform: scale(2.2) rotate(45deg); }
+				60% { opacity: 1; }
+				100% { transform: scale(1) rotate(0); }
+			}
+
+			.debrief {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				border-left: 1px solid #4d6088;
+				background: linear-gradient(180deg, #2c3b5a, var(--hull));
+				overflow: hidden;
+			}
+			.debrief-bar, .panel-bar {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 6px 10px;
+				font: 400 0.66rem/1.4 var(--display);
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+				color: var(--ice);
+				position: relative;
+				background: linear-gradient(180deg, #485b84, #3a4c72);
+				border-bottom: 1px solid #1f2a44;
+				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+			}
+			/* Dot-screen texture on the right of each panel header */
+			.debrief-bar::after, .panel-bar::after {
+				content: '';
+				position: absolute;
+				inset: 4px 6px 4px 58%;
+				background: radial-gradient(rgba(228, 236, 247, 0.3) 0.9px, transparent 1.1px) 0 0 / 4px 4px;
+				pointer-events: none;
+			}
+			.badge {
+				display: grid;
+				place-items: center;
+				width: 16px; height: 16px;
+				font: 600 0.72rem/1 var(--data);
+				letter-spacing: 0;
+				color: #1f2b46;
+				background: linear-gradient(180deg, #dfe7f3, #a7b6d1);
+			}
+			.debrief-body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+			.empty-note { display: none; }
+			.debrief.empty .debrief-body > :not(.empty-note) { display: none; }
+			.debrief.empty .empty-note { display: grid; gap: 8px; align-content: center; flex: 1; color: var(--dim); max-width: 34ch; }
+			.empty-title { font: 400 1rem/1.3 var(--display); letter-spacing: 0.04em; color: var(--ice); }
+			.debrief-head { display: flex; justify-content: space-between; align-items: center; }
+			.desig { font: 600 0.95rem/1 var(--data); letter-spacing: 0.08em; color: var(--dim); }
+			.status {
+				font: 600 0.8rem/1 var(--data);
+				letter-spacing: 0.05em;
+				padding: 4px 8px 3px;
+				border: 1px solid var(--line);
+				color: var(--ice);
+			}
+			.status.flight { color: var(--void); background: var(--amber); border-color: var(--amber); }
+			.sortie-name {
+				font: 400 clamp(1.5rem, 3vw, 1.9rem)/1.15 var(--display);
+				letter-spacing: 0.02em;
+				margin-top: 2px;
+			}
+			.sortie-kind { font: 500 0.95rem/1 var(--data); color: var(--dim); letter-spacing: 0.03em; }
+			.brief { display: grid; gap: 4px; border-top: 1px dotted rgba(196, 212, 238, 0.4); padding-top: 14px; }
+			.brief dt, .kv dt { font: 600 0.78rem/1.3 var(--data); letter-spacing: 0.06em; color: var(--dim); }
+			.brief dd { font-size: 0.97rem; line-height: 1.5; margin-bottom: 8px; max-width: 60ch; }
+			.kv { display: grid; gap: 6px; }
+			.kv div { display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: baseline; }
+			.kv dd { font: 500 0.98rem/1.35 var(--data); letter-spacing: 0.02em; }
+
+			.cta {
+				display: inline-flex;
+				align-items: center;
+				gap: 10px;
+				align-self: flex-start;
+				margin-top: auto;
+				padding: 8px 2px;
+				font: 600 0.95rem/1 var(--data);
+				letter-spacing: 0.04em;
+				text-decoration: none;
+				color: #fff;
+			}
+			.cta-gauge {
+				position: relative;
+				width: 30px; height: 8px;
+				border: 1px solid var(--plate);
+				background: var(--hull-lo);
+			}
+			.cta-gauge::before {
+				content: '';
+				position: absolute;
+				inset: 1px auto 1px 1px;
+				width: 7px;
+				background: var(--plate-hi);
+				transition: width 0.25s ease, background-color 0.25s ease;
+			}
+			.cta:hover .cta-gauge::before, .cta:focus-visible .cta-gauge::before { width: calc(100% - 2px); background: var(--amber); }
+
+			/* Panel swap: a bright bar wipes across, content changes underneath */
+			.wipe {
+				position: absolute;
+				inset: 26px 0 0;
+				background: linear-gradient(90deg, #c9d6ea, #fff);
+				transform: scaleX(0);
+				pointer-events: none;
+			}
+			.debrief.swap .wipe { animation: wipe 0.42s cubic-bezier(0.7, 0, 0.3, 1); }
+			.debrief.swap .debrief-body { animation: flicker 0.6s steps(1) 0.2s; }
+			@keyframes wipe {
+				0% { transform: scaleX(0); transform-origin: left; }
+				45% { transform: scaleX(1); transform-origin: left; }
+				46% { transform: scaleX(1); transform-origin: right; }
+				100% { transform: scaleX(0); transform-origin: right; }
+			}
+			@keyframes flicker {
+				0% { opacity: 0.4; } 20% { opacity: 1; } 35% { opacity: 0.6; } 50% { opacity: 1; }
+			}
+
+			.strip {
+				display: flex;
+				justify-content: space-between;
+				gap: 12px;
+				margin: 0 8px;
+				padding: 5px 10px;
+				font: 600 0.82rem/1.3 var(--data);
+				letter-spacing: 0.05em;
+				color: var(--dim);
+				background: linear-gradient(180deg, #3a4b70, #2f3f60);
+				border: 1px solid #4d6088;
+				border-top: 0;
+			}
+			.strip a { text-decoration: none; color: var(--ice); }
+			.strip a::before { content: '↓'; margin-right: 6px; color: var(--amber); }
+			.strip a:hover { text-decoration: underline; }
+
+			/* ---------- Lower panels ---------- */
+			.trio, .duo { display: grid; gap: 8px; margin: 12px 8px 0; }
+			.trio { grid-template-columns: 1.25fr 1fr 0.9fr; }
+			.duo { grid-template-columns: 1.3fr 1fr; }
+			.panel {
+				background: linear-gradient(180deg, #2f3e5f, var(--hull) 140px);
+				border: 1px solid #4d6088;
+				box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+			}
+			.register { margin: 12px 8px 0; }
+
+			.log { padding: 14px 16px 16px; display: grid; gap: 0; position: relative; }
+			.log li { display: grid; grid-template-columns: 62px 1fr; gap: 12px; padding: 7px 0; position: relative; }
+			.log li + li { border-top: 1px dotted rgba(196, 212, 238, 0.25); }
+			.log time { font: 600 0.88rem/1.5 var(--data); letter-spacing: 0.04em; color: var(--plate-hi); font-variant-numeric: tabular-nums; }
+			.log li:last-child time { color: var(--amber); }
+			.log p { font-size: 0.92rem; line-height: 1.45; }
+
+			.tel { padding: 14px 16px 16px; display: grid; gap: 10px; }
+			.reading { font: 500 0.9rem/1.2 var(--data); color: var(--dim); letter-spacing: 0.03em; }
+			.big { display: block; font: 400 2rem/1.1 var(--display); color: var(--ice); letter-spacing: 0.02em; }
+			.bars { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; height: 92px; align-items: end; }
+			.bars li { display: grid; grid-template-rows: 1fr auto; height: 100%; gap: 4px; }
+			.bar {
+				align-self: end;
+				height: calc(var(--h) * 100%);
+				background: repeating-linear-gradient(0deg, var(--plate-hi) 0 3px, transparent 3px 5px);
+			}
+			.bars li:last-child .bar { background: repeating-linear-gradient(0deg, var(--amber) 0 3px, transparent 3px 5px); }
+			.m { font: 600 0.72rem/1 var(--data); color: var(--dim); text-align: center; }
+			.sub { font: 600 0.8rem/1.2 var(--data); letter-spacing: 0.05em; color: var(--dim); margin-top: 6px; }
+			.mix { display: flex; gap: 2px; height: 10px; }
+			.mix span { flex: var(--w) 0 0; background: var(--plate); }
+			.mix span:nth-child(1) { background: var(--ice); }
+			.mix span:nth-child(2) { background: var(--plate-hi); }
+			.mix span:nth-child(4) { background: #56698f; }
+			.mix span:nth-child(5) { background: #44567c; }
+			.mix-key { display: flex; flex-wrap: wrap; gap: 2px 12px; font: 500 0.85rem/1.4 var(--data); color: var(--dim); }
+			.mix-key .n { color: var(--ice); font-weight: 600; }
+
+			.comms { padding: 10px 16px 16px; }
+			.comms li { padding: 9px 0; font-size: 0.92rem; line-height: 1.45; }
+			.comms li + li { border-top: 1px dotted rgba(196, 212, 238, 0.25); }
+			.comms b { display: block; font: 600 0.8rem/1.4 var(--data); letter-spacing: 0.05em; color: var(--plate-hi); }
+			.comms cite { font-style: italic; }
+
+			/* Sortie register */
+			.reg-head, .reg-row {
+				display: grid;
+				grid-template-columns: 110px 1.4fr 1fr 90px 110px;
+				gap: 12px;
+				align-items: center;
+				padding: 0 16px;
+			}
+			.reg-head {
+				padding-block: 8px 6px;
+				font: 600 0.78rem/1 var(--data);
+				letter-spacing: 0.06em;
+				color: var(--dim);
+				border-bottom: 1px solid var(--line);
+			}
+			.reg li + li { border-top: 1px dotted rgba(196, 212, 238, 0.22); }
+			.reg-row {
+				width: 100%;
+				padding-block: 11px;
+				border: 0;
+				background: none;
+				color: var(--ice);
+				text-align: left;
+				font: 400 0.98rem/1.3 var(--body);
+				cursor: pointer;
+				position: relative;
+			}
+			.reg-row:hover { background: rgba(122, 141, 176, 0.14); }
+			.reg-row[aria-pressed='true'] { background: rgba(242, 177, 59, 0.08); }
+			.reg-row[aria-pressed='true']::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: var(--amber); }
+			.r-id, .r-year { font: 600 0.95rem/1 var(--data); letter-spacing: 0.06em; color: var(--dim); font-variant-numeric: tabular-nums; }
+			.r-name { font-weight: 600; }
+			.r-kind { color: var(--dim); }
+			.r-status { font: 600 0.88rem/1 var(--data); letter-spacing: 0.04em; }
+			.r-status::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border: 1.5px solid var(--ice); border-radius: 50%; vertical-align: 1px; }
+			.r-status.flight { color: var(--amber); }
+			.r-status.flight::before { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; }
+
+			.dossier { padding: 16px 18px 18px; display: grid; gap: 12px; }
+			.lede { font-size: 1.08rem; line-height: 1.5; max-width: 62ch; }
+			.dossier > p:not(.lede) { color: var(--dim); max-width: 62ch; }
+			.dossier .kv { border-top: 1px dotted rgba(196, 212, 238, 0.4); padding-top: 12px; }
+			.dossier .kv div { grid-template-columns: 100px 1fr; }
+			.uplink { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 4px; }
+			.uplink p { color: var(--dim); margin-bottom: 8px; }
+			.uplink .cta { margin-top: 0; }
+
+			.foot {
+				display: flex;
+				justify-content: space-between;
+				gap: 12px;
+				flex-wrap: wrap;
+				margin: 12px 8px 0;
+				padding: 8px 10px;
+				font: 600 0.8rem/1.3 var(--data);
+				letter-spacing: 0.05em;
+				color: var(--dim);
+				border-top: 1px solid #4d6088;
+			}
+			.foot .credit { flex-basis: 100%; font-weight: 500; opacity: 0.8; }
+			.foot a { color: var(--ice); }
+
+			/* ---------- Boot sequence (only when html.boot) ---------- */
+			.loader { display: none; }
+			.boot .loader {
+				position: fixed;
+				inset: 0;
+				z-index: 10;
+				display: grid;
+				place-content: center;
+				justify-items: center;
+				gap: 14px;
+				background: var(--hull);
+				animation: loader-out 0.35s ease 1.15s forwards;
+			}
+			.loader .ring { width: 54px; height: 54px; fill: none; stroke-width: 2.5; }
+			.loader .ring circle:first-child { stroke: rgba(228, 236, 247, 0.25); }
+			.loader .ring path { stroke: var(--ice); transform-origin: 30px 30px; animation: spin 0.9s linear infinite; }
+			.loader .core { fill: var(--amber); stroke: none; animation: blink 0.45s steps(1) infinite; }
+			.loader p {
+				padding: 4px 10px;
+				font: 400 0.68rem/1.4 var(--display);
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+				color: var(--ice);
+				border-inline: 1px solid rgba(228, 236, 247, 0.35);
+			}
+			@keyframes spin { to { transform: rotate(360deg); } }
+			@keyframes blink { 50% { opacity: 0.2; } }
+			@keyframes loader-out { to { opacity: 0; visibility: hidden; } }
+
+			.boot [data-boot] { animation: power-on 0.55s cubic-bezier(0.6, 0, 0.2, 1) backwards; animation-delay: calc(1.3s + var(--i) * 0.13s); }
+			.boot .viewport[data-boot] { animation-name: open-viewport; animation-duration: 0.7s; }
+			@keyframes power-on {
+				0% { clip-path: inset(0 100% 0 0); filter: brightness(2.4) saturate(0.3); }
+				55% { clip-path: inset(0 0 0 0); filter: brightness(1.8) saturate(0.5); }
+				70% { filter: brightness(1); }
+				80% { filter: brightness(1.5); }
+				100% { clip-path: inset(0 0 0 0); filter: none; }
+			}
+			@keyframes open-viewport {
+				0% { clip-path: inset(50% 50% 50% 50%); filter: brightness(3); }
+				35% { clip-path: inset(calc(50% - 1px) 0 calc(50% - 1px) 0); filter: brightness(3); }
+				100% { clip-path: inset(0 0 0 0); filter: none; }
+			}
+
+			/* ---------- Full view: only the solar system until a page is chosen ---------- */
+			.immersive-bar, .immersive-hint { display: none; }
+			.immersive, .immersive body { overflow: hidden; }
+			.immersive .chassis { max-width: none; min-height: 0; padding: 0; border: 0; box-shadow: none; background: #05070d; }
+			.immersive .plate, .immersive .tabs, .immersive .debrief, .immersive .strip,
+			.immersive .trio, .immersive .register, .immersive .duo, .immersive .foot, .immersive .full-view { display: none; }
+			.immersive .viewport { display: block; margin: 0; border: 0; box-shadow: none; }
+			.immersive .plot { height: 100vh; height: 100dvh; }
+			.immersive .hud.tl { top: 92px; left: 28px; }
+			.immersive .hud.bl { bottom: 22px; left: 28px; }
+			.immersive .hud.br { bottom: 22px; right: 28px; }
+
+			.immersive .immersive-bar {
+				position: absolute;
+				top: 0; left: 0; right: 0;
+				z-index: 2;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				flex-wrap: wrap;
+				gap: 12px 24px;
+				padding: 22px 28px 40px;
+				background: linear-gradient(180deg, rgba(5, 7, 13, 0.75), transparent);
+				pointer-events: none;
+			}
+			.immersive-bar > * { pointer-events: auto; }
+			.immersive-nav { display: flex; flex-wrap: wrap; gap: 2px; }
+			.immersive-nav a {
+				padding: 9px 13px;
+				font: 400 0.66rem/1.2 var(--display);
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+				text-decoration: none;
+				color: var(--dim);
+				border: 1px solid transparent;
+				transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+			}
+			.immersive-nav a:hover, .immersive-nav a:focus-visible { color: #fff; background: rgba(40, 54, 82, 0.6); border-color: rgba(228, 236, 247, 0.22); }
+			.immersive .immersive-hint {
+				display: block;
+				position: absolute;
+				bottom: 22px; left: 50%;
+				translate: -50% 0;
+				font: 500 0.88rem/1.3 var(--data);
+				letter-spacing: 0.04em;
+				color: var(--dim);
+				white-space: nowrap;
+				pointer-events: none;
+			}
+
+			/* In the console, a button on the plot returns to the full view */
+			.full-view {
+				position: absolute;
+				top: 12px; right: 14px;
+				z-index: 2;
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				padding: 7px 11px;
+				font: 400 0.62rem/1.2 var(--display);
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+				color: var(--ice);
+				background: rgba(20, 28, 48, 0.72);
+				border: 1px solid var(--line);
+				cursor: pointer;
+			}
+			.full-view svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+			.full-view:hover { border-color: var(--amber); color: #fff; }
+
+			/* Opening the console replays the power-on sequence, faster than the first-visit boot */
+			@media (prefers-reduced-motion: no-preference) {
+				.opening [data-boot] { animation: power-on 0.5s cubic-bezier(0.6, 0, 0.2, 1) backwards; animation-delay: calc(var(--i) * 0.08s); }
+				.opening .viewport[data-boot] { animation-name: open-viewport; animation-duration: 0.6s; }
+			}
+
+			/* ---------- Responsive ---------- */
+			@media (max-width: 980px) {
+				.viewport { grid-template-columns: 1fr; }
+				.debrief { border-left: 0; border-top: 1px solid #4d6088; }
+				.trio { grid-template-columns: 1fr 1fr; }
+				.trio > :first-child { grid-column: 1 / -1; }
+			}
+			@media (max-width: 640px) {
+				.immersive .immersive-bar { padding: 16px 16px 32px; }
+				.immersive-nav a { padding: 8px 9px; font-size: 0.6rem; }
+				.immersive .hud.tl { display: none; }
+				.immersive .hud.bl { bottom: 16px; left: 16px; }
+				.immersive .immersive-hint { bottom: 48px; font-size: 0.8rem; }
+				.plate { padding: 16px; }
+				.callsign { font-size: 0.8rem; }
+				.tabs { grid-template-columns: repeat(6, 1fr); }
+				.tabs a { grid-column: span 2; }
+				.tabs a:nth-child(n + 4) { grid-column: span 3; border-top: 1px solid #44567c; }
+				.tabs a:nth-child(4) { border-left: 0; }
+				.plot { height: 360px; }
+				.tag b { display: none; }
+				.hud.br { display: none; }
+				.tag { font-size: 0.74rem; }
+				.trio, .duo { grid-template-columns: 1fr; }
+				.strip p { display: none; }
+				.reg-head { display: none; }
+				.reg-row { grid-template-columns: 1fr auto; grid-template-areas: 'name status' 'id kind'; row-gap: 4px; }
+				.r-name { grid-area: name; }
+				.r-status { grid-area: status; }
+				.r-id { grid-area: id; font-size: 0.85rem; }
+				.r-kind { grid-area: kind; font-size: 0.85rem; text-align: right; }
+				.r-year { display: none; }
+				.debrief-body { padding: 18px 16px; }
+				.kv div, .dossier .kv div { grid-template-columns: 84px 1fr; }
+			}
+		</style>
+	</body>
+</html>

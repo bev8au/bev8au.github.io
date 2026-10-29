@@ -6,6 +6,11 @@
       "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
       "runtimeArgs": ["node_modules/astro/bin/astro.mjs", "dev", "--port", "4321"],
       "port": 4321
+    },
+    {
+      "name": "astro-dev-attach",
+      "url": "http://localhost:4321",
+      "port": 4321
     }
   ]
 }
