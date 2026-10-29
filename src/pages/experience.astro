@@ -1,0 +1,171 @@
+---
+import ConsoleLayout from '../layouts/ConsoleLayout.astro';
+import Timeline from '../components/Timeline.astro';
+import { roles, academic, activities, education, skills, interests } from '../data/experience';
+import { profile } from '../data/profile';
+import Portrait from '../components/Portrait.astro';
+import idPortrait from '../assets/portraits/id-portrait.webp';
+---
+
+<ConsoleLayout status="Service record" title="Experience | Martin Liu" description="Martin Liu's experience in investment banking, private equity, venture capital, and equity research, plus astrophysics research, teaching, and leadership at UVA." active="experience">
+	<div class="layout">
+		<section class="panel record" aria-labelledby="exp-title">
+			<h1 class="panel-bar" id="exp-title"><span class="badge">E</span>Experience</h1>
+			<div class="intro">
+				<Portrait
+					src={idPortrait}
+					alt="Portrait of Martin Liu in a navy suit and tie"
+					kind="id"
+					labels={{ topLeft: 'ID bev8au', topRight: 'Class of 2027' }}
+					caption={{ title: 'Liu, Martin', sub: 'UVA McIntire // Finance' }}
+					face={{ left: 32, top: 9, width: 37, height: 38 }}
+					sizes="(max-width: 640px) 45vw, 220px"
+					loading="eager"
+				/>
+				<div class="intro-text">
+					<p class="name">{profile.name}</p>
+					<p class="lede">Commerce student at UVA's McIntire School, concentrating in finance with a minor in computer science. Internships across investment banking, corporate investment, private equity, venture capital, and equity research, plus astrophysics research and teaching at UVA.</p>
+					<nav class="jump" aria-label="Sections of this page">
+						<a href="#work-title">Professional <span class="count">{roles.length}</span></a>
+						<a href="#academic-title">Academic and research <span class="count">{academic.length}</span></a>
+						<a href="#activities-title">Activities <span class="count">{activities.length}</span></a>
+					</nav>
+					<p class="quick-cv"><a href="/cv/">View CV</a> <span class="sep">//</span> <a href={profile.cv} download="Martin-Liu-CV.pdf">Download PDF</a></p>
+				</div>
+			</div>
+
+			<section class="block" aria-labelledby="work-title">
+				<h2 id="work-title">Professional experience</h2>
+				<Timeline roles={roles} />
+			</section>
+
+			<section class="block" aria-labelledby="academic-title">
+				<h2 id="academic-title">Academic and research</h2>
+				<Timeline roles={academic} />
+			</section>
+
+			<section class="block" aria-labelledby="activities-title">
+				<h2 id="activities-title">Activities and leadership</h2>
+				<Timeline roles={activities} />
+			</section>
+		</section>
+
+		<div class="side">
+			<section class="panel cv" aria-labelledby="cv-title">
+				<h2 class="panel-bar" id="cv-title"><span class="badge">C</span>Curriculum vitae</h2>
+				<div class="side-body">
+					<p>The full one-page CV, updated {profile.cvUpdated}.</p>
+					<div class="actions">
+						<a class="cta" href="/cv/"><span class="cta-gauge" aria-hidden="true"></span>View CV</a>
+						<a class="cta" href={profile.cv} download="Martin-Liu-CV.pdf"><span class="cta-gauge" aria-hidden="true"></span>Download PDF</a>
+					</div>
+				</div>
+			</section>
+
+			<section class="panel" aria-labelledby="edu-title">
+				<h2 class="panel-bar" id="edu-title"><span class="badge">U</span>Education</h2>
+				<div class="side-body">
+					<p class="school">
+						{education.school.map((s, i) => (
+							<>{i > 0 && ', '}<a class="ext" href={s.url} target="_blank" rel="noopener">{s.name}</a></>
+						))}
+					</p>
+					<p class="degree">{education.degree}</p>
+					<p class="dates">{education.dates} <span class="sep">//</span> {education.place}</p>
+					<dl class="facts">
+						{education.facts.map((f) => (
+							<div><dt>{f.label}</dt><dd>{f.value}</dd></div>
+						))}
+					</dl>
+					<p class="sub">Related courses</p>
+					<ul class="chips">{education.courses.map((c) => <li>{c}</li>)}</ul>
+					<p class="next">{education.next}</p>
+				</div>
+			</section>
+
+			<section class="panel" aria-labelledby="skills-title">
+				<h2 class="panel-bar" id="skills-title"><span class="badge">S</span>Skills and interests</h2>
+				<div class="side-body">
+					{skills.map((g) => (
+						<>
+							<p class="sub">{g.group}</p>
+							<ul class="chips">
+								{g.items.map((s) => (
+									<li><a class="chip-link" href={s.url} target="_blank" rel="noopener" title={`${s.name} official site`}>{s.name}</a></li>
+								))}
+							</ul>
+						</>
+					))}
+					<p class="sub">Interests</p>
+					<dl class="interests">
+						{interests.map((i) => (
+							<div><dt>{i.name}</dt><dd>{i.detail}</dd></div>
+						))}
+					</dl>
+				</div>
+			</section>
+		</div>
+	</div>
+</ConsoleLayout>
+
+<style>
+	.layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(280px, 1fr); gap: 8px; margin: 12px 8px 0; align-items: start; }
+	.panel-bar { margin: 0; }
+	/* ID portrait beside the name and summary */
+	.intro { padding: 28px 28px 8px; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: start; }
+	.intro-text { display: grid; gap: 10px; align-content: start; }
+	.name { margin: 0; font: 400 clamp(1.5rem, 3.6vw, 2.2rem)/1.15 var(--display); letter-spacing: 0.03em; }
+	.lede { margin: 0; max-width: 62ch; font-size: 1.05rem; line-height: 1.55; }
+	/* Short CV link for narrow screens, where the CV panel sits below the long record */
+	.quick-cv { display: none; margin: 0; font: 600 0.95rem/1.3 var(--data); letter-spacing: 0.04em; }
+	.quick-cv a { color: #fff; text-decoration-color: var(--amber); text-underline-offset: 3px; }
+	/* Jump links to the three record sections */
+	.jump { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+	.jump a { padding: 6px 10px; font: 600 0.88rem/1.2 var(--data); letter-spacing: 0.04em; color: var(--ice); text-decoration: none; background: rgba(29, 40, 64, 0.7); border: 1px solid var(--line); }
+	.jump a:hover, .jump a:focus-visible { color: #fff; box-shadow: inset 0 0 0 1px var(--amber); }
+	.count { margin-left: 4px; color: var(--amber); font-variant-numeric: tabular-nums; }
+	.block h2 { scroll-margin-top: 16px; }
+	.interests { margin: 0; display: grid; gap: 10px; }
+	.interests dt { font: 600 0.95rem/1.3 var(--body); color: #fff; }
+	.interests dd { margin: 2px 0 0; font-size: 0.88rem; line-height: 1.5; color: var(--dim); }
+
+	.block { padding: 18px 28px 6px; }
+	.block + .block { border-top: 1px solid var(--line); }
+	.block h2 { margin: 6px 0 20px; font: 400 0.78rem/1.3 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--plate-hi); }
+
+	.side { display: grid; gap: 8px; }
+	.side-body { padding: 16px 18px 18px; display: grid; gap: 8px; }
+	.side-body p { margin: 0; }
+	.cv p { color: var(--dim); }
+	.actions { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+	.actions .cta { margin-top: 0; }
+	.school { font-weight: 600; color: #fff; line-height: 1.35; }
+	.degree { line-height: 1.4; }
+	.dates { font: 600 0.85rem/1.3 var(--data); letter-spacing: 0.04em; color: var(--dim); }
+	.facts { margin: 6px 0 0; padding-top: 10px; border-top: 1px dotted rgba(196, 212, 238, 0.4); display: grid; gap: 6px; }
+	.facts div { display: grid; grid-template-columns: 112px 1fr; gap: 10px; align-items: baseline; }
+	.facts dt { font: 600 0.8rem/1.3 var(--data); letter-spacing: 0.05em; color: var(--dim); }
+	.facts dd { margin: 0; font: 500 0.98rem/1.35 var(--data); letter-spacing: 0.02em; }
+	.side-body .sub { margin-top: 8px; font: 600 0.8rem/1.3 var(--data); letter-spacing: 0.05em; color: var(--dim); }
+	.chips { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px; }
+	.chips li { padding: 3px 8px; font: 500 0.88rem/1.3 var(--data); letter-spacing: 0.02em; background: rgba(29, 40, 64, 0.7); border: 1px solid var(--line); }
+	/* Linked chips: the whole chip is the link, and it lights amber on hover */
+	.chips li:has(.chip-link) { padding: 0; }
+	.chip-link { display: block; padding: 3px 8px; color: var(--ice); text-decoration: none; transition: color 0.15s, background-color 0.15s, box-shadow 0.15s; }
+	.chip-link:hover, .chip-link:focus-visible { color: #fff; background: rgba(74, 93, 134, 0.45); box-shadow: inset 0 0 0 1px var(--amber); }
+	/* School names read as links: underline in the accent */
+	.ext { color: #fff; text-decoration: underline; text-decoration-color: rgba(242, 177, 59, 0.6); text-underline-offset: 3px; }
+	.ext:hover, .ext:focus-visible { text-decoration-color: var(--amber); }
+	.side-body .next { margin-top: 6px; padding-top: 10px; border-top: 1px dotted rgba(196, 212, 238, 0.4); font-size: 0.92rem; color: var(--dim); }
+
+	@media (max-width: 900px) {
+		.layout { grid-template-columns: 1fr; }
+		.quick-cv { display: block; }
+	}
+	@media (max-width: 640px) {
+		.intro { padding: 22px 16px 4px; grid-template-columns: 1fr; gap: 18px; }
+		.intro :global(.portrait) { width: min(220px, 62%); }
+		.block { padding: 16px 16px 4px; }
+		.side-body { padding: 14px 16px 16px; }
+	}
+</style>

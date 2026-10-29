@@ -10,7 +10,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export type Look = 'ice' | 'gas' | 'ocean' | 'rust' | 'moss';
+export type Look = 'ice' | 'gas' | 'ocean' | 'rust' | 'moss' | 'moon' | 'amber';
 export type BodySpec = { id: string; year: number; phase: number; look: Look; size: number };
 export type ScreenPoint = { key: string; x: number; y: number; r: number };
 export type PlotOptions = {
@@ -22,6 +22,8 @@ export type PlotOptions = {
 
 const ORBIT: Record<number, number> = { 2023: 3.4, 2024: 5.2, 2025: 10, 2026: 12.6 };
 const BELT = [6.6, 8.6];
+// Most planets that can cast shadows on each other; must be at least the number of sorties
+const MAX_OCC = 8;
 const AMBER = new THREE.Color('#f2b13b');
 const ICE = new THREE.Color('#e4ecf7');
 const TEX = `${import.meta.env.BASE_URL.replace(/\/?$/, '/')}textures/`;
@@ -34,6 +36,8 @@ const SURFACE: Record<Look, Surface> = {
 	ocean: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg', normal: 'earth_normal.jpg', specular: 'earth_specular.jpg', atmo: '#5f9cff', haze: 1.4 },
 	rust: { map: 'mars.jpg', bump: 1.4, atmo: '#e0a080', haze: 0.45 },
 	moss: { map: 'ceres.jpg', tint: '#b4c796', bump: 1.4, atmo: '#c7d6a8', haze: 0.35 },
+	moon: { map: 'moon.jpg', tint: '#e2ddd4', bump: 1.6, atmo: '#d6dbe4', haze: 0.15 },
+	amber: { map: 'ceres.jpg', tint: '#eaa266', bump: 1.2, atmo: '#f0b070', haze: 0.4 }, // basketball orange
 };
 
 // ---------- CPU noise, used to shape rocks ----------
@@ -131,7 +135,7 @@ const PLANET_FRAGMENT = /* glsl */ `
 	uniform sampler2D uDay, uNight, uClouds, uNormal, uSpec, uRingTex;
 	uniform float uHasNight, uHasClouds, uHasNormal, uHasSpec, uBump, uHasRing, uRingIn, uRingOut, uTime;
 	uniform vec3 uTint, uSunView, uRingCenter, uRingNormal, uAtmo;
-	uniform vec4 uOcc[5];
+	uniform vec4 uOcc[MAX_OCC];
 	uniform int uOccCount, uSelf;
 	varying vec3 vN; varying vec3 vViewPos; varying vec2 vUv;
 
@@ -163,7 +167,7 @@ const PLANET_FRAGMENT = /* glsl */ `
 	// Soft shadows from other planets and from a ring plane, along the ray to the star
 	float shadowAt(vec3 P, vec3 L, float toSun) {
 		float s = 1.0;
-		for (int i = 0; i < 5; i++) {
+		for (int i = 0; i < MAX_OCC; i++) {
 			if (i >= uOccCount) break;
 			if (i == uSelf) continue;
 			vec3 oc = uOcc[i].xyz - P;
@@ -462,12 +466,13 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 				uAtmo: { value: new THREE.Color(surf.atmo) },
 				uSunView: { value: new THREE.Vector3() },
 				uTime: { value: 0 },
-				uOcc: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) },
+				uOcc: { value: Array.from({ length: MAX_OCC }, () => new THREE.Vector4()) },
 				uOccCount: { value: 0 },
 				uSelf: { value: index },
 			},
 			vertexShader: VIEW_VERTEX,
-			fragmentShader: PLANET_FRAGMENT,
+			fragmentShader: `#define MAX_OCC ${MAX_OCC}
+${PLANET_FRAGMENT}`,
 		});
 		const spin = new THREE.Mesh(new THREE.SphereGeometry(s.size, 96, 48), mat);
 		tilt.add(spin);
@@ -839,8 +844,8 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 			const u = b.mat.uniforms;
 			u.uSunView.value.copy(sunView);
 			u.uTime.value = t;
-			u.uOccCount.value = bodies.length;
-			bodies.forEach((o, i) => (u.uOcc.value[i] as THREE.Vector4).set(o.view.x, o.view.y, o.view.z, o.size));
+			u.uOccCount.value = Math.min(bodies.length, MAX_OCC);
+			bodies.slice(0, MAX_OCC).forEach((o, i) => (u.uOcc.value[i] as THREE.Vector4).set(o.view.x, o.view.y, o.view.z, o.size));
 			b.atmo.uniforms.uSun.value.copy(sunView).sub(b.view).normalize();
 			if (b.ring) {
 				nrm.set(0, 0, 1).transformDirection(b.ring.mesh.matrixWorld).transformDirection(camera.matrixWorldInverse);

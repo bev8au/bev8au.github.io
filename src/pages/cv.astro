@@ -1,0 +1,61 @@
+---
+import ConsoleLayout from '../layouts/ConsoleLayout.astro';
+import { profile } from '../data/profile';
+---
+
+<ConsoleLayout status="Service record" title="CV | Martin Liu" description="Martin Liu's CV as a PDF." active="experience">
+	<section class="panel viewer" aria-labelledby="cv-title">
+		<div class="panel-bar">
+			<span class="badge">C</span>
+			<a class="crumb" href="/experience/">Experience</a>
+			<span class="sep">/</span>
+			<h1 id="cv-title">Curriculum vitae</h1>
+		</div>
+
+		<div class="toolbar">
+			<p class="meta">{profile.name} <span class="sep">//</span> One page, updated {profile.cvUpdated}</p>
+			<div class="actions">
+				<a class="cta" href={profile.cv} target="_blank" rel="noopener"><span class="cta-gauge" aria-hidden="true"></span>Open in new tab</a>
+				<a class="cta" href={profile.cv} download="Martin-Liu-CV.pdf"><span class="cta-gauge" aria-hidden="true"></span>Download PDF</a>
+			</div>
+		</div>
+
+		<!-- Browsers that can't show PDFs inline (most phones) render the fallback inside instead -->
+		<object class="pdf" data={`${profile.cv}#view=FitH&navpanes=0`} type="application/pdf" aria-label="Martin Liu's CV">
+			<div class="fallback">
+				<p class="fallback-title">This browser can't show the PDF on the page.</p>
+				<p>Open it in your PDF viewer or download it instead.</p>
+				<div class="actions">
+					<a class="cta" href={profile.cv} target="_blank" rel="noopener"><span class="cta-gauge" aria-hidden="true"></span>Open the CV</a>
+					<a class="cta" href={profile.cv} download="Martin-Liu-CV.pdf"><span class="cta-gauge" aria-hidden="true"></span>Download PDF</a>
+				</div>
+			</div>
+		</object>
+	</section>
+</ConsoleLayout>
+
+<style>
+	.viewer { margin: 12px 8px 0; }
+	.panel-bar h1 { margin: 0; font: inherit; letter-spacing: inherit; }
+	.crumb { color: var(--ice); text-decoration: none; }
+	.crumb:hover { text-decoration: underline; }
+	.panel-bar .sep { opacity: 0.5; }
+
+	.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 24px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+	.meta { margin: 0; font: 600 0.88rem/1.3 var(--data); letter-spacing: 0.04em; color: var(--dim); }
+	.actions { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+	.actions .cta { margin-top: 0; }
+
+	/* A US-letter page is about 1.3 times as tall as it is wide; show the whole page without inner scrolling where possible */
+	.pdf { display: block; width: 100%; height: max(80vh, 1040px); background: #525659; }
+	.fallback { display: grid; gap: 10px; place-content: center; justify-items: start; min-height: 320px; padding: 32px 24px; background: var(--hull); }
+	.fallback p { margin: 0; }
+	.fallback-title { font: 400 1rem/1.35 var(--display); letter-spacing: 0.03em; }
+	.fallback p:not(.fallback-title) { color: var(--dim); }
+
+	@media (max-width: 640px) {
+		.panel-bar::after { display: none; }
+		.toolbar { padding: 12px 16px; }
+		.pdf { height: 75vh; }
+	}
+</style>

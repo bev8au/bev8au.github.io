@@ -1,65 +1,83 @@
 ---
+import '../../styles/console.css';
+import { tabs as navTabs } from '../../data/nav';
+import { profile } from '../../data/profile';
+import Portrait from '../../components/Portrait.astro';
+import fieldPhoto from '../../assets/portraits/field-photo.jpg';
 // Design D: Mission debrief. Projects orbit a home star on a tactical plot; orbit radius is the launch year.
 // Clicking a target locks on and swaps the debrief panel. Motion language borrowed from 2Advanced V3.
 const sorties = [
 	{
-		id: 'MLU-05', name: 'Lantern', kind: 'Research', year: 2026, phase: 0.6, status: 'flight', look: 'ice', size: 0.55,
-		objective: 'Find near-Earth asteroid streaks in wide-field survey frames before a human has to look at them.',
-		outcome: 'A streak classifier at 94% recall on held-out nights. The detection pipeline goes to the group review in December.',
-		stack: 'Python, PyTorch, Astropy', crew: 'Me + 3, Dept. of Astronomy', duration: '9 months and counting',
+		id: 'MLU-07', name: 'Goldman Sachs GH', kind: 'Investment banking intern', year: 2026, phase: 0.6, status: 'complete', look: 'gas', size: 0.85,
+		objective: 'Evaluate two AI companies, in industrial IoT and AI agent infrastructure, for a sale process, and value a leading Chinese automaker.',
+		outcome: "Mapped M&A synergies with potential buyers across product, technology, data, and cost, and prepared pitchbook materials for buyer outreach. Built the automaker's valuation model with a Middle East expansion scenario and pitched a block trade to a regional PE firm ahead of a shareholder lockup expiry.",
+		focus: 'M&A, valuation, block trades', place: 'Beijing, China', dates: 'Jun 2026 to Aug 2026',
 	},
 	{
-		id: 'MLU-04', name: 'Orrery', kind: 'Simulation', year: 2025, phase: 3.7, status: 'complete', look: 'gas', size: 0.85,
-		objective: 'Run a real n-body solar system in the browser at 60 frames per second.',
-		outcome: 'Barnes-Hut on WebGPU holds 50,000 bodies at 60 fps on a laptop. Jupiter still eats a comet every few minutes.',
-		stack: 'Rust, WASM, WebGPU', crew: 'Solo', duration: '4 months',
+		id: 'MLU-06', name: 'ICE: Allianz and Uber', kind: 'Consulting project', year: 2025, phase: 4.6, status: 'complete', look: 'moon', size: 0.38,
+		objective: "Two client projects in McIntire's Integrated Core Experience: a new service for Allianz and an acquisition for Uber.",
+		outcome: 'Modeled a global travel repatriation service for Allianz at a 25.09% IRR and presented it to Allianz executives. Proposed Uber acquiring GoTo, with $1.9B in projected synergies and a half-cash, half-stock structure.',
+		focus: 'Financial modeling, M&A', place: 'UVA McIntire', dates: 'Sep 2025 to May 2026',
 	},
 	{
-		id: 'MLU-03', name: "Hoo's Free", kind: 'Web app', year: 2025, phase: 1.4, status: 'flight', look: 'ocean', size: 0.5,
-		objective: 'Find an empty study room on Grounds without walking every floor of the library.',
-		outcome: 'Scrapes the booking system every five minutes. About 1,100 people use it each week during finals.',
-		stack: 'Python, FastAPI, Svelte', crew: 'Me + 1', duration: 'Live since Feb 2025',
+		id: 'MLU-05', name: 'China Mobile Investment', kind: 'Corporate investment intern', year: 2025, phase: 0.4, status: 'complete', look: 'ocean', size: 0.5,
+		objective: 'Find edge computing investments in the RISC-V ecosystem and help close a robotics deal.',
+		outcome: 'Wrote a 50-page RISC-V industry report. Supported a $100M investment closing in a robotics manufacturer: the initiation report, due diligence, unit economics, and the valuation model.',
+		focus: 'RISC-V, robotics, due diligence', place: 'Beijing, China', dates: 'May 2025 to Aug 2025',
 	},
 	{
-		id: 'MLU-02', name: 'beatbox', kind: 'Game', year: 2024, phase: 4.9, status: 'complete', look: 'rust', size: 0.42,
-		objective: 'Turn any MP3 into a playable four-lane rhythm chart, right in the browser.',
-		outcome: 'Beat detection builds a chart in about two seconds. 400 players showed up after one Reddit post.',
-		stack: 'TypeScript, Web Audio API', crew: 'Solo', duration: '6 weeks',
+		id: 'MLU-04', name: 'Portola Growth Partners', kind: 'Private equity intern', year: 2025, phase: 2.5, status: 'complete', look: 'ice', size: 0.5,
+		objective: 'Source investments in pediatric behavioral health and home medical equipment.',
+		outcome: 'Screened 100 startups and contacted five targets. Ran due diligence on Unicare Diagnostics, including EBITDA and margin analysis.',
+		focus: 'Healthcare services', place: 'New York (remote)', dates: 'Jan 2025 to May 2025',
 	},
 	{
-		id: 'MLU-01', name: 'Plant Pager', kind: 'Hardware', year: 2023, phase: 2.2, status: 'complete', look: 'moss', size: 0.36,
-		objective: 'Keep one basil plant alive through a semester of late nights.',
-		outcome: 'An ESP32 soil sensor texts me below 30% moisture. The basil has been saved twice.',
-		stack: 'C++, ESP32, Twilio', crew: 'Solo, plus basil', duration: '3 weekends',
+		id: 'MLU-03', name: 'Credit & Restructuring', kind: 'Club project lead', year: 2024, phase: 4.3, status: 'complete', look: 'moss', size: 0.36,
+		objective: 'Learn credit and restructuring analysis, and lead research on AI-enabled corporate financing.',
+		outcome: "Studied restructuring cases shared by KKR's restructuring team. Led a four-person study of machine learning in credit assessment, bond pricing, and private credit, including model risks like black-box behavior and data bias.",
+		focus: 'Credit, restructuring, AI in finance', place: 'UVA Credit & Restructuring Club', dates: 'Sep 2024 to May 2025',
+	},
+	{
+		id: 'MLU-02', name: 'HUAXI Securities', kind: 'Equity research intern', year: 2024, phase: 1.2, status: 'complete', look: 'rust', size: 0.45,
+		objective: "Track data-center GPU design and cover a company in China's IoT sector.",
+		outcome: "Built a Python dataset of 30+ GPU architectures and used machine learning to forecast next-generation features, consistent with NVIDIA's later releases. Wrote a 40-page industry report and a 17-page due diligence report on Wanma Technology.",
+		focus: 'Semiconductors, IoT', place: 'Beijing, China', dates: 'May 2024 to Aug 2024',
+	},
+	{
+		id: 'MLU-01', name: 'Chinese Basketball', kind: 'Team captain', year: 2023, phase: 2.2, status: 'flight', look: 'amber', size: 0.34,
+		objective: 'Run practices and tactics for the UVA Chinese Basketball Team.',
+		outcome: "Triangle League runner-up and NECBL Division Champion. Raised $4,000 in sponsorships for the team's operations.",
+		focus: 'Leadership', place: 'Charlottesville, VA', dates: 'Sep 2023 to present',
 	},
 ];
 const statusText = { flight: 'In flight', complete: 'Complete' };
 
+// Milestones from the résumé; the Experience page has the full record
 const log = [
-	{ date: '2023.08', text: 'Launched. Started a BS in Computer Science at the University of Virginia.' },
-	{ date: '2024.06', text: 'Software intern at Blue Ridge Robotics. Wrote the telemetry dashboard for their field rovers.' },
-	{ date: '2025.01', text: 'Teaching assistant for CS 2100, Data Structures and Algorithms.' },
-	{ date: '2025.09', text: 'Joined the Lantern asteroid-detection group in the Department of Astronomy.' },
-	{ date: '2026.05', text: 'Flight software intern at Ridgeline Aerospace, on the cubesat ground station team.' },
+	{ date: '2023.08', text: 'Launched. Started a BS in Commerce at UVA McIntire, concentrating in finance, minor in computer science.' },
+	{ date: '2024.05', text: 'Equity research intern at HUAXI Securities, Beijing. Forecast next-generation data-center GPU features.' },
+	{ date: '2025.01', text: 'Private equity intern at Portola Growth Partners, screening pediatric behavioral health startups.' },
+	{ date: '2025.05', text: 'Investment intern at China Mobile Investment. Supported a $100M robotics investment closing.' },
+	{ date: '2026.06', text: 'Investment banking intern at Goldman Sachs GH Securities, Beijing, on M&A and a block trade pitch.' },
 ];
 
-const commits = [
-	{ m: 'Jan', n: 84 }, { m: 'Feb', n: 132 }, { m: 'Mar', n: 158 }, { m: 'Apr', n: 121 }, { m: 'May', n: 96 },
-	{ m: 'Jun', n: 143 }, { m: 'Jul', n: 171 }, { m: 'Aug', n: 112 }, { m: 'Sep', n: 139 }, { m: 'Oct', n: 128 },
+// Research written during internships, in pages, and headline figures from the résumé
+const reports = [
+	{ name: 'RISC-V industry report', org: 'China Mobile Investment', pages: 50 },
+	{ name: 'Data-center GPU report', org: 'HUAXI Securities', pages: 40 },
+	{ name: 'Wanma Technology due diligence', org: 'HUAXI Securities', pages: 17 },
 ];
-const maxCommits = Math.max(...commits.map((c) => c.n));
-const totalCommits = commits.reduce((s, c) => s + c.n, 0);
-const langs = [
-	{ name: 'Python', pct: 38 }, { name: 'TypeScript', pct: 27 }, { name: 'Rust', pct: 18 }, { name: 'C++', pct: 11 }, { name: 'Other', pct: 6 },
+const maxPages = Math.max(...reports.map((r) => r.pages));
+const totalPages = reports.reduce((sum, r) => sum + r.pages, 0);
+const readings = [
+	{ label: 'Startups screened', value: '100' },
+	{ label: 'GPU architectures analyzed', value: '30+' },
+	{ label: 'Investment closing supported', value: '$100M' },
+	{ label: 'GPA', value: '3.9 / 4.0' },
 ];
 
-const tabs = [
-	{ href: '#debrief', label: 'Debrief' },
-	{ href: '#sorties', label: 'Sorties' },
-	{ href: '#log', label: 'Flight log' },
-	{ href: '#dossier', label: 'Dossier' },
-	{ href: '#uplink', label: 'Uplink' },
-];
+// On this page the debrief sections are plain hashes; Writing is its own route
+const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t.label }));
 ---
 
 <html lang="en">
@@ -103,7 +121,7 @@ const tabs = [
 					</svg>
 					<span class="wordmark">Martin Liu</span>
 				</a>
-				<p class="callsign">Survey vessel UVA/CS <span class="sep">//</span> <time class="clock">--:--:-- UTC</time></p>
+				<p class="callsign">Survey vessel UVA McIntire <span class="sep">//</span> <time class="clock">--:--:-- UTC</time></p>
 			</header>
 
 			<nav class="tabs" aria-label="Sections" data-boot style="--i:1">
@@ -180,11 +198,11 @@ const tabs = [
 								<dt>Outcome</dt><dd data-f="outcome"></dd>
 							</dl>
 							<dl class="kv">
-								<div><dt>Stack</dt><dd data-f="stack"></dd></div>
-								<div><dt>Crew</dt><dd data-f="crew"></dd></div>
-								<div><dt>Duration</dt><dd data-f="duration"></dd></div>
+								<div><dt>Focus</dt><dd data-f="focus"></dd></div>
+								<div><dt>Location</dt><dd data-f="place"></dd></div>
+								<div><dt>Dates</dt><dd data-f="dates"></dd></div>
 							</dl>
-							<a class="cta" href="https://github.com/bev8au"><span class="cta-gauge" aria-hidden="true"></span>Read the full report on GitHub</a>
+							<a class="cta" href="/experience/"><span class="cta-gauge" aria-hidden="true"></span>See the full record</a>
 						</div>
 						<span class="wipe" aria-hidden="true"></span>
 					</aside>
@@ -208,31 +226,28 @@ const tabs = [
 					<section class="panel" aria-labelledby="tel-title" data-boot style="--i:5">
 						<h2 class="panel-bar" id="tel-title"><span class="badge">T</span>Telemetry</h2>
 						<div class="tel">
-							<p class="reading"><span class="big">{totalCommits.toLocaleString('en-US')}</span> commits in 2026</p>
-							<ol class="bars" aria-label="Commits per month, January to October 2026">
-								{commits.map((c) => (
-									<li style={`--h:${c.n / maxCommits}`} title={`${c.m}: ${c.n}`}>
-										<span class="bar"></span>
-										<span class="m">{c.m.slice(0, 1)}</span>
-									</li>
-								))}
-							</ol>
-							<p class="sub">Languages by lines written</p>
-							<div class="mix" role="img" aria-label={langs.map((l) => `${l.name} ${l.pct}%`).join(', ')}>
-								{langs.map((l) => <span style={`--w:${l.pct}`}></span>)}
-							</div>
-							<ul class="mix-key">
-								{langs.map((l) => <li><span class="n">{l.pct}%</span> {l.name}</li>)}
-							</ul>
+							<p class="reading"><span class="big">{totalPages}</span> pages of research and due diligence reports</p>
+								<ol class="reports">
+									{reports.map((r) => (
+										<li style={`--w:${r.pages / maxPages}`}>
+											<span class="r-label">{r.name} <span class="r-org">{r.org}</span></span>
+											<span class="r-bar" aria-hidden="true"></span>
+											<span class="r-pages">{r.pages}</span>
+										</li>
+									))}
+								</ol>
+								<dl class="readings">
+									{readings.map((r) => <div><dt>{r.label}</dt><dd>{r.value}</dd></div>)}
+								</dl>
 						</div>
 					</section>
 
 					<section class="panel" aria-labelledby="comms-title" data-boot style="--i:6">
 						<h2 class="panel-bar" id="comms-title"><span class="badge">C</span>Comms</h2>
 						<ul class="comms">
-							<li><b>Now</b> Finishing Lantern's detection pipeline for the December review.</li>
-							<li><b>Seeking</b> Summer 2027 internships in systems, graphics, or flight software.</li>
-							<li><b>Reading</b> <cite>Real-Time Collision Detection</cite>, slowly.</li>
+							<li><b>Now</b> Applying to graduate school; finishing my BS in May 2027.</li>
+							<li><b>Teaching</b> Assistant for Foundations of Finance and Financial Management.</li>
+							<li><b>Court</b> Captain of the UVA Chinese Basketball Team: Triangle League runner-up, NECBL Division Champion.</li>
 						</ul>
 					</section>
 				</div>
@@ -261,13 +276,22 @@ const tabs = [
 					<section id="dossier" class="panel" aria-labelledby="dossier-title">
 						<h2 class="panel-bar" id="dossier-title"><span class="badge">P</span>Pilot dossier</h2>
 						<div class="dossier">
-							<p class="lede">I study computer science at UVA and build software that has to work under pressure: simulations, sensor pipelines, and tools people open during finals week.</p>
-							<p>Most of my time goes to the Lantern group, teaching people to love linked lists, and pointing a small telescope at things from the roof of my building.</p>
+							<Portrait
+								src={fieldPhoto}
+								alt="Martin Liu in a navy suit, standing in a white colonnade"
+								kind="field"
+								labels={{ topLeft: 'Field image', topRight: 'C-ville' }}
+								caption={{ title: 'Liu, Martin', sub: 'Callsign bev8au' }}
+								face={{ left: 36, top: 20, width: 29, height: 30 }}
+								sizes="(max-width: 640px) 60vw, 180px"
+							/>
+							<p class="lede">I study commerce at UVA's McIntire School, concentrating in finance with a minor in computer science. I came to finance from astronomy, and I still like to work things out from first principles.</p>
+							<p>Outside class I captain the UVA Chinese Basketball Team, play piano, and keep an eye on the night sky.</p>
 							<dl class="kv">
 								<div><dt>Callsign</dt><dd>bev8au</dd></div>
 								<div><dt>Home base</dt><dd>Charlottesville, VA</dd></div>
-								<div><dt>Program</dt><dd>BS Computer Science, class of 2027</dd></div>
-								<div><dt>Specialty</dt><dd>Systems, graphics, scientific computing</dd></div>
+								<div><dt>Program</dt><dd>BS Commerce, Finance, class of 2027</dd></div>
+								<div><dt>Tracks</dt><dd>Quantitative Finance; Analytics and AI</dd></div>
 							</dl>
 						</div>
 					</section>
@@ -275,10 +299,10 @@ const tabs = [
 					<section id="uplink" class="panel" aria-labelledby="uplink-title">
 						<h2 class="panel-bar" id="uplink-title"><span class="badge">U</span>Uplink</h2>
 						<div class="uplink">
-							<p>Email is the fastest channel. I answer within a day.</p>
-							<a class="cta" href="mailto:bev8au@virginia.edu"><span class="cta-gauge" aria-hidden="true"></span>Email Martin</a>
-							<a class="cta" href="https://github.com/bev8au"><span class="cta-gauge" aria-hidden="true"></span>See code on GitHub</a>
-							<a class="cta" href="#"><span class="cta-gauge" aria-hidden="true"></span>Download résumé (PDF)</a>
+							<p>Connect on LinkedIn or send an email.</p>
+							<a class="cta" href={profile.linkedin} target="_blank" rel="noopener"><span class="cta-gauge" aria-hidden="true"></span>Connect on LinkedIn</a>
+							<a class="cta" href={`mailto:${profile.email}`}><span class="cta-gauge" aria-hidden="true"></span>Email Martin</a>
+							<a class="cta" href="/cv/"><span class="cta-gauge" aria-hidden="true"></span>View CV (PDF)</a>
 						</div>
 					</section>
 				</div>
@@ -298,7 +322,7 @@ const tabs = [
 
 			type Sortie = {
 				id: string; name: string; kind: string; year: number; phase: number; status: string; statusText: string;
-				look: Look; size: number; objective: string; outcome: string; stack: string; crew: string; duration: string;
+				look: Look; size: number; objective: string; outcome: string; focus: string; place: string; dates: string;
 			};
 			const sorties: Sortie[] = JSON.parse(document.getElementById('sortie-data')!.textContent!);
 			const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -312,26 +336,53 @@ const tabs = [
 			const marks = new Map<string, HTMLElement>();
 			plot.querySelectorAll<HTMLElement>('.yr').forEach((m) => marks.set(m.dataset.key!, m));
 
+			// Label sizes are measured up front and on resize; measuring every frame would force layout
+			const tagSize = new Map<string, { w: number; h: number }>();
+			const measureTags = () => buttons.forEach((b, id) => {
+				const t = b.querySelector<HTMLElement>('.tag')!;
+				tagSize.set(id, { w: t.offsetWidth, h: t.offsetHeight });
+			});
+			measureTags();
+			document.fonts?.ready.then(measureTags);
+			addEventListener('resize', measureTags);
+			let hoveredId = '';
+
 			const scene = createPlot(plot, sorties, {
 				reduced,
 				zoomNeedsModifier: () => !document.documentElement.classList.contains('immersive'),
 				onFrame(bodies, labels) {
 					const w = plot.clientWidth;
-					for (const b of bodies) {
+					// Place labels in priority order (locked, hovered, then nearer and larger planets);
+					// a label that would overlap one already placed fades out until its planet is hovered
+					const priority = (key: string, r: number) => (key === current ? 1e6 : key === hoveredId ? 1e5 : r);
+					const placed: { l: number; t: number; r: number; b: number }[] = [];
+					for (const b of [...bodies].sort((a, z) => priority(z.key, z.r) - priority(a.key, a.r))) {
 						const btn = buttons.get(b.key)!;
+						const r = Math.max(b.r, 6);
+						const flip = b.x > w * 0.6;
 						btn.style.transform = `translate(${b.x}px, ${b.y}px)`;
-						btn.style.setProperty('--r', `${Math.max(b.r, 6)}px`);
-						btn.classList.toggle('flip', b.x > w * 0.6);
+						btn.style.setProperty('--r', `${r}px`);
+						btn.classList.toggle('flip', flip);
+						// Matches the .tag offsets in CSS: beside the hit area, its bottom just above the planet
+						const size = tagSize.get(b.key) ?? { w: 0, h: 0 };
+						const left = flip ? b.x - r - 4 - size.w : b.x + r + 4;
+						const top = b.y - r + 2 - size.h;
+						const box = { l: left, t: top, r: left + size.w, b: top + size.h };
+						const overlaps = placed.some((p) => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t);
+						const hide = overlaps && b.key !== current && b.key !== hoveredId;
+						btn.classList.toggle('tag-hidden', hide);
+						if (!hide) placed.push(box);
 					}
 					for (const l of labels) marks.get(l.key)!.style.transform = `translate(${l.x}px, ${l.y}px)`;
 				},
 			});
 
-			// Hold the planets still while a pointer or keyboard is on a target
-			targetsLayer.addEventListener('pointerover', (e) => { if ((e.target as Element).closest('.target')) scene.setPaused(true); });
-			targetsLayer.addEventListener('pointerout', () => scene.setPaused(false));
-			targetsLayer.addEventListener('focusin', () => scene.setPaused(true));
-			targetsLayer.addEventListener('focusout', () => scene.setPaused(false));
+			// Hold the planets still while a pointer or keyboard is on a target, and give its label priority
+			const targetId = (e: Event) => (e.target as Element).closest<HTMLElement>('.target')?.dataset.id ?? '';
+			targetsLayer.addEventListener('pointerover', (e) => { hoveredId = targetId(e); if (hoveredId) scene.setPaused(true); });
+			targetsLayer.addEventListener('pointerout', () => { hoveredId = ''; scene.setPaused(false); });
+			targetsLayer.addEventListener('focusin', (e) => { hoveredId = targetId(e); scene.setPaused(true); });
+			targetsLayer.addEventListener('focusout', () => { hoveredId = ''; scene.setPaused(false); });
 
 			// ---------- Debrief panel ----------
 			const panel = document.querySelector<HTMLElement>('.debrief')!;
@@ -440,121 +491,10 @@ const tabs = [
 				}),
 				{ rootMargin: '-40% 0px -55% 0px' },
 			);
-			tabLinks.forEach((a) => { const t = document.querySelector(a.hash); if (t) spy.observe(t); });
+			tabLinks.forEach((a) => { const t = a.hash && document.querySelector(a.hash); if (t) spy.observe(t); });
 		</script>
 
 		<style is:global>
-			:root {
-				--void: #141c30;
-				--hull: #283652;
-				--hull-hi: #33446a;
-				--hull-lo: #1d2840;
-				--plate: #7a8db0;
-				--plate-hi: #a7b6d1;
-				--ice: #e4ecf7;
-				--dim: #93a3c0;
-				--amber: #f2b13b;
-				--line: rgba(196, 212, 238, 0.16);
-				--display: 'Michroma', 'Eurostile', sans-serif;
-				--body: 'Barlow', system-ui, sans-serif;
-				--data: 'Barlow Condensed', 'Barlow', sans-serif;
-				color-scheme: dark;
-			}
-			* { box-sizing: border-box; }
-			html { scroll-behavior: smooth; scroll-padding-top: 12px; }
-			@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-			body {
-				margin: 0;
-				background-color: var(--void);
-				/* Dot-grid gutters, fading toward the bottom like the 2A frame */
-				background-image:
-					radial-gradient(rgba(147, 163, 192, 0.28) 1px, transparent 1.2px),
-					linear-gradient(180deg, #2a3958 0%, var(--void) 70%);
-				background-size: 6px 6px, 100% 100%;
-				color: var(--ice);
-				font: 400 1rem/1.55 var(--body);
-				-webkit-font-smoothing: antialiased;
-			}
-			a { color: inherit; }
-			:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
-			p, h1, h2, ol, ul, dl, dd { margin: 0; padding: 0; }
-			ol, ul { list-style: none; }
-
-			.chassis {
-				max-width: 1240px;
-				margin: 0 auto;
-				background: var(--hull);
-				border-inline: 1px solid rgba(167, 182, 209, 0.35);
-				box-shadow: 0 0 0 6px rgba(20, 28, 48, 0.6), 0 30px 80px rgba(5, 8, 16, 0.6);
-				min-height: 100vh;
-				padding-bottom: 8px;
-			}
-
-			/* ---------- Header plate ---------- */
-			.plate {
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				gap: 16px;
-				flex-wrap: wrap;
-				padding: 22px 24px 18px;
-				background:
-					repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 4px),
-					linear-gradient(180deg, var(--plate-hi), var(--plate));
-				border-bottom: 1px solid #56688c;
-				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-			}
-			.mark { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #fff; }
-			.mark svg { width: 40px; height: 40px; fill: none; stroke: #fff; stroke-width: 2; filter: drop-shadow(0 1px 0 rgba(30, 40, 64, 0.5)); }
-			.mark svg circle { fill: #fff; stroke: none; }
-			.mark .moon { fill: var(--amber); }
-			.wordmark {
-				font: 400 clamp(1.05rem, 2.4vw, 1.5rem)/1 var(--display);
-				letter-spacing: 0.14em;
-				text-transform: uppercase;
-				text-shadow: 0 1px 0 rgba(30, 40, 64, 0.55);
-			}
-			.callsign {
-				font: 600 0.9rem/1 var(--data);
-				letter-spacing: 0.06em;
-				color: #1f2b46;
-				font-variant-numeric: tabular-nums;
-			}
-			.sep { opacity: 0.55; margin-inline: 4px; }
-
-			/* ---------- Tab strip ---------- */
-			.tabs {
-				display: grid;
-				grid-template-columns: repeat(5, 1fr);
-				margin: 8px 8px 0;
-				background: var(--hull-lo);
-				border: 1px solid #44567c;
-			}
-			.tabs a {
-				position: relative;
-				padding: 10px 6px 9px;
-				text-align: center;
-				text-decoration: none;
-				font: 400 0.68rem/1.2 var(--display);
-				letter-spacing: 0.1em;
-				text-transform: uppercase;
-				color: var(--dim);
-				background: linear-gradient(180deg, #2e3d5e, #243150);
-				border-left: 1px solid #44567c;
-				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-			}
-			.tabs a:first-child { border-left: 0; }
-			.tabs a:hover { color: var(--ice); }
-			.tabs a.on { color: #fff; background: linear-gradient(180deg, #4a5d86, #34466c); }
-			.tabs a.on::after {
-				content: '';
-				position: absolute;
-				left: 50%; bottom: -1px;
-				width: 28px; height: 2px;
-				translate: -50% 0;
-				background: var(--amber);
-			}
-
 			/* ---------- Viewport: plot + debrief ---------- */
 			.viewport {
 				display: grid;
@@ -638,7 +578,11 @@ const tabs = [
 				background: rgba(12, 17, 30, 0.62);
 				border-left: 1px solid var(--line);
 				backdrop-filter: blur(2px);
+				transition: opacity 0.2s;
 			}
+			/* Labels that would collide fade out; hovering or focusing the planet brings its label back */
+			.target.tag-hidden .tag { opacity: 0; }
+			.target.tag-hidden:hover .tag, .target.tag-hidden:focus-visible .tag { opacity: 1; }
 			.glyph { display: inline-block; width: 6px; height: 6px; margin-right: 6px; vertical-align: 1px; border: 1.5px solid var(--ice); border-radius: 50%; }
 			.target.flight .glyph { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; }
 			.tag b { font-weight: 600; color: var(--dim); margin-right: 3px; }
@@ -680,37 +624,6 @@ const tabs = [
 				background: linear-gradient(180deg, #2c3b5a, var(--hull));
 				overflow: hidden;
 			}
-			.debrief-bar, .panel-bar {
-				display: flex;
-				align-items: center;
-				gap: 10px;
-				padding: 6px 10px;
-				font: 400 0.66rem/1.4 var(--display);
-				letter-spacing: 0.12em;
-				text-transform: uppercase;
-				color: var(--ice);
-				position: relative;
-				background: linear-gradient(180deg, #485b84, #3a4c72);
-				border-bottom: 1px solid #1f2a44;
-				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-			}
-			/* Dot-screen texture on the right of each panel header */
-			.debrief-bar::after, .panel-bar::after {
-				content: '';
-				position: absolute;
-				inset: 4px 6px 4px 58%;
-				background: radial-gradient(rgba(228, 236, 247, 0.3) 0.9px, transparent 1.1px) 0 0 / 4px 4px;
-				pointer-events: none;
-			}
-			.badge {
-				display: grid;
-				place-items: center;
-				width: 16px; height: 16px;
-				font: 600 0.72rem/1 var(--data);
-				letter-spacing: 0;
-				color: #1f2b46;
-				background: linear-gradient(180deg, #dfe7f3, #a7b6d1);
-			}
 			.debrief-body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
 			.empty-note { display: none; }
 			.debrief.empty .debrief-body > :not(.empty-note) { display: none; }
@@ -738,34 +651,6 @@ const tabs = [
 			.kv { display: grid; gap: 6px; }
 			.kv div { display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: baseline; }
 			.kv dd { font: 500 0.98rem/1.35 var(--data); letter-spacing: 0.02em; }
-
-			.cta {
-				display: inline-flex;
-				align-items: center;
-				gap: 10px;
-				align-self: flex-start;
-				margin-top: auto;
-				padding: 8px 2px;
-				font: 600 0.95rem/1 var(--data);
-				letter-spacing: 0.04em;
-				text-decoration: none;
-				color: #fff;
-			}
-			.cta-gauge {
-				position: relative;
-				width: 30px; height: 8px;
-				border: 1px solid var(--plate);
-				background: var(--hull-lo);
-			}
-			.cta-gauge::before {
-				content: '';
-				position: absolute;
-				inset: 1px auto 1px 1px;
-				width: 7px;
-				background: var(--plate-hi);
-				transition: width 0.25s ease, background-color 0.25s ease;
-			}
-			.cta:hover .cta-gauge::before, .cta:focus-visible .cta-gauge::before { width: calc(100% - 2px); background: var(--amber); }
 
 			/* Panel swap: a bright bar wipes across, content changes underneath */
 			.wipe {
@@ -808,11 +693,6 @@ const tabs = [
 			.trio, .duo { display: grid; gap: 8px; margin: 12px 8px 0; }
 			.trio { grid-template-columns: 1.25fr 1fr 0.9fr; }
 			.duo { grid-template-columns: 1.3fr 1fr; }
-			.panel {
-				background: linear-gradient(180deg, #2f3e5f, var(--hull) 140px);
-				border: 1px solid #4d6088;
-				box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
-			}
 			.register { margin: 12px 8px 0; }
 
 			.log { padding: 14px 16px 16px; display: grid; gap: 0; position: relative; }
@@ -825,24 +705,16 @@ const tabs = [
 			.tel { padding: 14px 16px 16px; display: grid; gap: 10px; }
 			.reading { font: 500 0.9rem/1.2 var(--data); color: var(--dim); letter-spacing: 0.03em; }
 			.big { display: block; font: 400 2rem/1.1 var(--display); color: var(--ice); letter-spacing: 0.02em; }
-			.bars { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; height: 92px; align-items: end; }
-			.bars li { display: grid; grid-template-rows: 1fr auto; height: 100%; gap: 4px; }
-			.bar {
-				align-self: end;
-				height: calc(var(--h) * 100%);
-				background: repeating-linear-gradient(0deg, var(--plate-hi) 0 3px, transparent 3px 5px);
-			}
-			.bars li:last-child .bar { background: repeating-linear-gradient(0deg, var(--amber) 0 3px, transparent 3px 5px); }
-			.m { font: 600 0.72rem/1 var(--data); color: var(--dim); text-align: center; }
-			.sub { font: 600 0.8rem/1.2 var(--data); letter-spacing: 0.05em; color: var(--dim); margin-top: 6px; }
-			.mix { display: flex; gap: 2px; height: 10px; }
-			.mix span { flex: var(--w) 0 0; background: var(--plate); }
-			.mix span:nth-child(1) { background: var(--ice); }
-			.mix span:nth-child(2) { background: var(--plate-hi); }
-			.mix span:nth-child(4) { background: #56698f; }
-			.mix span:nth-child(5) { background: #44567c; }
-			.mix-key { display: flex; flex-wrap: wrap; gap: 2px 12px; font: 500 0.85rem/1.4 var(--data); color: var(--dim); }
-			.mix-key .n { color: var(--ice); font-weight: 600; }
+			.reports { display: grid; gap: 10px; margin-top: 4px; }
+			.reports li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+			.r-label { font-size: 0.88rem; line-height: 1.3; }
+			.r-org { display: block; font: 500 0.78rem/1.3 var(--data); letter-spacing: 0.03em; color: var(--dim); }
+			.r-bar { grid-column: 1; height: 8px; width: calc(var(--w) * 100%); background: repeating-linear-gradient(90deg, var(--plate-hi) 0 3px, transparent 3px 5px); }
+			.reports li:first-child .r-bar { background: repeating-linear-gradient(90deg, var(--amber) 0 3px, transparent 3px 5px); }
+			.r-pages { grid-column: 2; grid-row: 1 / span 2; align-self: end; font: 600 1rem/1 var(--data); font-variant-numeric: tabular-nums; }
+			.readings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin: 6px 0 0; padding-top: 12px; border-top: 1px dotted rgba(196, 212, 238, 0.4); }
+			.readings dt { font: 600 0.76rem/1.25 var(--data); letter-spacing: 0.04em; color: var(--dim); }
+			.readings dd { margin: 2px 0 0; font: 400 1.05rem/1.2 var(--display); letter-spacing: 0.02em; color: var(--ice); }
 
 			.comms { padding: 10px 16px 16px; }
 			.comms li { padding: 9px 0; font-size: 0.92rem; line-height: 1.45; }
@@ -888,7 +760,10 @@ const tabs = [
 			.r-status.flight { color: var(--amber); }
 			.r-status.flight::before { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; }
 
-			.dossier { padding: 16px 18px 18px; display: grid; gap: 12px; }
+			/* Field photo in its own column; the text runs beside it */
+			.dossier { padding: 16px 18px 18px; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px 20px; align-content: start; }
+			.dossier > .portrait { grid-row: 1 / span 3; }
+			.dossier > :not(.portrait) { grid-column: 2; }
 			.lede { font-size: 1.08rem; line-height: 1.5; max-width: 62ch; }
 			.dossier > p:not(.lede) { color: var(--dim); max-width: 62ch; }
 			.dossier .kv { border-top: 1px dotted rgba(196, 212, 238, 0.4); padding-top: 12px; }
@@ -896,21 +771,6 @@ const tabs = [
 			.uplink { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 4px; }
 			.uplink p { color: var(--dim); margin-bottom: 8px; }
 			.uplink .cta { margin-top: 0; }
-
-			.foot {
-				display: flex;
-				justify-content: space-between;
-				gap: 12px;
-				flex-wrap: wrap;
-				margin: 12px 8px 0;
-				padding: 8px 10px;
-				font: 600 0.8rem/1.3 var(--data);
-				letter-spacing: 0.05em;
-				color: var(--dim);
-				border-top: 1px solid #4d6088;
-			}
-			.foot .credit { flex-basis: 100%; font-weight: 500; opacity: 0.8; }
-			.foot a { color: var(--ice); }
 
 			/* ---------- Boot sequence (only when html.boot) ---------- */
 			.loader { display: none; }
@@ -1045,12 +905,6 @@ const tabs = [
 				.immersive .hud.tl { display: none; }
 				.immersive .hud.bl { bottom: 16px; left: 16px; }
 				.immersive .immersive-hint { bottom: 48px; font-size: 0.8rem; }
-				.plate { padding: 16px; }
-				.callsign { font-size: 0.8rem; }
-				.tabs { grid-template-columns: repeat(6, 1fr); }
-				.tabs a { grid-column: span 2; }
-				.tabs a:nth-child(n + 4) { grid-column: span 3; border-top: 1px solid #44567c; }
-				.tabs a:nth-child(4) { border-left: 0; }
 				.plot { height: 360px; }
 				.tag b { display: none; }
 				.hud.br { display: none; }
@@ -1066,6 +920,9 @@ const tabs = [
 				.r-year { display: none; }
 				.debrief-body { padding: 18px 16px; }
 				.kv div, .dossier .kv div { grid-template-columns: 84px 1fr; }
+				.dossier { grid-template-columns: 1fr; }
+				.dossier > .portrait { grid-row: auto; width: min(220px, 62%); }
+				.dossier > :not(.portrait) { grid-column: 1; }
 			}
 		</style>
 	</body>

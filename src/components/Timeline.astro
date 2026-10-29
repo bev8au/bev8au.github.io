@@ -1,0 +1,60 @@
+---
+// Dated entries on a vertical rail, newest first. The newest (or ongoing) entry's node is lit amber.
+import type { Role } from '../data/experience';
+
+interface Props {
+	roles: Role[];
+}
+const { roles } = Astro.props;
+---
+
+<ol class="timeline">
+	{roles.map((r, i) => (
+		<li class:list={['entry', { live: i === 0 || r.end === 'Present' }]}>
+			<p class="when">
+				<time>{r.start}</time> – {r.end === 'Present' ? 'Present' : <time>{r.end}</time>}
+			</p>
+			<div class="what">
+				<h3>{r.title}</h3>
+				<p class="org">{r.org} <span class="place">{r.place}</span></p>
+				{r.note && <p class="note">{r.note}</p>}
+				<ul>
+					{r.points.map((p) => <li>{p}</li>)}
+				</ul>
+				{r.links && (
+					<p class="links">
+						{r.links.map((l) => <a href={l.url} target="_blank" rel="noopener">{l.label}</a>)}
+					</p>
+				)}
+			</div>
+		</li>
+	))}
+</ol>
+
+<style>
+	.timeline { margin: 0; padding: 0; list-style: none; }
+	.entry { position: relative; display: grid; grid-template-columns: 132px 1fr; gap: 20px; padding: 0 0 26px; }
+	/* The rail runs between the date column and the text; each entry puts a node on it */
+	.entry::before { content: ''; position: absolute; left: 141px; top: 6px; bottom: 0; width: 1px; background: rgba(196, 212, 238, 0.22); }
+	.entry:last-child::before { bottom: auto; height: 12px; }
+	.entry::after { content: ''; position: absolute; left: 137px; top: 6px; width: 7px; height: 7px; border: 1.5px solid var(--plate-hi); background: var(--hull); border-radius: 50%; }
+	.entry.live::after { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; width: 8px; height: 8px; }
+	.when { margin: 0; font: 600 0.88rem/1.4 var(--data); letter-spacing: 0.04em; color: var(--plate-hi); font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.live .when { color: var(--amber); }
+	.what { min-width: 0; padding-left: 4px; }
+	h3 { margin: 0; font: 600 1.12rem/1.3 var(--body); color: #fff; }
+	.org { margin: 2px 0 10px; font: 500 0.98rem/1.35 var(--body); color: var(--ice); }
+	.place { margin-left: 6px; font: 500 0.88rem/1 var(--data); letter-spacing: 0.03em; color: var(--dim); }
+	.note { margin: -6px 0 10px; font: 500 0.88rem/1.3 var(--data); letter-spacing: 0.03em; color: var(--plate-hi); }
+	.links { margin: 10px 0 0; padding-left: 16px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+	.links a { font: 600 0.92rem/1.3 var(--data); letter-spacing: 0.03em; color: #fff; text-decoration-color: var(--amber); text-underline-offset: 3px; }
+	ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+	ul li { position: relative; padding-left: 16px; max-width: 70ch; font-size: 0.95rem; line-height: 1.55; color: #cdd7e6; }
+	ul li::before { content: ''; position: absolute; left: 0; top: 0.72em; width: 7px; height: 1px; background: var(--plate-hi); }
+
+	@media (max-width: 640px) {
+		.entry { grid-template-columns: 1fr; gap: 4px; padding: 0 0 22px 22px; }
+		.entry::before { left: 3px; }
+		.entry::after { left: 0; }
+	}
+</style>

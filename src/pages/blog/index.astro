@@ -1,0 +1,103 @@
+---
+import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
+import ConsoleLayout from '../../layouts/ConsoleLayout.astro';
+
+const posts = (await getCollection('blog')).sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+// Group by month, newest first: the dates read like the flight log (2025.01)
+const stamp = (d: Date) => `${d.getUTCFullYear()}.${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+const day = (d: Date) => `${stamp(d)}.${String(d.getUTCDate()).padStart(2, '0')}`;
+const months = [...new Set(posts.map((p) => stamp(p.data.pubDate)))].map((m) => ({ month: m, posts: posts.filter((p) => stamp(p.data.pubDate) === m) }));
+const first = posts.at(-1)!.data.pubDate;
+const last = posts[0].data.pubDate;
+const monthName = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+---
+
+<ConsoleLayout status="Writing archive" title="Writing | Martin Liu" description="Commerspective: essays on commerce and finance by Martin Liu." active="writing">
+	<section class="panel archive" aria-labelledby="archive-title">
+		<h1 class="panel-bar"><span class="badge">W</span>Writing</h1>
+
+		<div class="intro">
+			<p class="blog-name" id="archive-title">Commerspective</p>
+			<p class="blog-about">Essays on commerce and finance, written while I moved from astronomy to finance. Leverage, hedging, discounted cash flow, and how they show up in everyday decisions.</p>
+			<p class="blog-meta">{posts.length} posts <span class="sep">//</span> {monthName(first)} to {monthName(last)}</p>
+		</div>
+
+		{months.map((g) => (
+			<section class="month" aria-label={g.month}>
+				<h2 class="month-stamp">{g.month}</h2>
+				<ol class="entries">
+					{g.posts.map((p) => (
+						<li>
+							<a class="entry" href={`/blog/${p.id}/`}>
+								{p.data.cover && (
+									<Image class="thumb" src={p.data.cover} alt="" width={320} height={200} fit="cover" loading="lazy" />
+								)}
+								<span class="entry-text">
+									<span class="entry-meta">
+										<time datetime={p.data.pubDate.toISOString()}>{day(p.data.pubDate)}</time>
+										{p.data.readingTime && <><span class="sep">//</span>{p.data.readingTime}</>}
+									</span>
+									<span class="entry-title">{p.data.title}</span>
+									<span class="entry-desc">{p.data.description}</span>
+								</span>
+							</a>
+						</li>
+					))}
+				</ol>
+			</section>
+		))}
+	</section>
+</ConsoleLayout>
+
+<style>
+	.archive { margin: 12px 8px 0; }
+	h1.panel-bar { margin: 0; }
+	.intro { padding: 28px 28px 22px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); }
+	.blog-name { margin: 0; font: 400 clamp(1.6rem, 4vw, 2.4rem)/1.1 var(--display); letter-spacing: 0.04em; }
+	.blog-about { margin: 0; max-width: 62ch; font-size: 1.05rem; line-height: 1.55; color: var(--ice); }
+	.blog-meta { margin: 0; font: 600 0.85rem/1.3 var(--data); letter-spacing: 0.05em; color: var(--dim); }
+
+	.month { display: grid; grid-template-columns: 96px 1fr; border-bottom: 1px solid var(--line); }
+	.month:last-child { border-bottom: 0; }
+	.month-stamp {
+		margin: 0;
+		padding: 22px 0 0 28px;
+		font: 600 0.95rem/1 var(--data);
+		letter-spacing: 0.06em;
+		color: var(--plate-hi);
+		font-variant-numeric: tabular-nums;
+	}
+	.entries { margin: 0; padding: 0; list-style: none; }
+	.entries li + li { border-top: 1px dotted rgba(196, 212, 238, 0.22); }
+	.entry {
+		position: relative;
+		display: grid;
+		grid-template-columns: 160px 1fr;
+		gap: 20px;
+		align-items: start;
+		padding: 18px 28px 18px 0;
+		text-decoration: none;
+		color: var(--ice);
+	}
+	.entry::before { content: ''; position: absolute; left: -12px; top: 14px; bottom: 14px; width: 3px; background: var(--amber); opacity: 0; transition: opacity 0.15s; }
+	.entry:hover::before, .entry:focus-visible::before { opacity: 1; }
+	.entry:hover .entry-title, .entry:focus-visible .entry-title { color: #fff; text-decoration: underline; text-decoration-color: var(--amber); text-underline-offset: 4px; }
+	.thumb { width: 160px; height: 100px; object-fit: cover; border: 1px solid #4d6088; background: var(--hull-lo); filter: saturate(0.85); }
+	.entry-text { display: grid; gap: 6px; min-width: 0; }
+	.entry-meta { font: 600 0.82rem/1.2 var(--data); letter-spacing: 0.05em; color: var(--dim); font-variant-numeric: tabular-nums; }
+	.entry-title { font: 600 1.18rem/1.3 var(--body); }
+	.entry-desc { max-width: 64ch; font-size: 0.95rem; line-height: 1.5; color: var(--dim); }
+
+	@media (max-width: 640px) {
+		.intro { padding: 22px 16px 18px; }
+		.month { grid-template-columns: 1fr; }
+		.month-stamp { padding: 18px 16px 4px; }
+		.entry { grid-template-columns: 96px 1fr; gap: 14px; padding: 14px 16px; }
+		.entry::before { left: 0; }
+		.thumb { width: 96px; height: 64px; }
+		.entry-title { font-size: 1.05rem; }
+		.entry-desc { display: none; }
+	}
+</style>

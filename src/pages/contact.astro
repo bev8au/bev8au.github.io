@@ -1,0 +1,109 @@
+---
+import ConsoleLayout from '../layouts/ConsoleLayout.astro';
+import { profile } from '../data/profile';
+import Portrait from '../components/Portrait.astro';
+import idPortrait from '../assets/portraits/id-portrait.webp';
+
+const handle = profile.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '').replace(/\/$/, '');
+---
+
+<ConsoleLayout status="Uplink open" title="Contact | Martin Liu" description="Contact Martin Liu on LinkedIn or by email." active="contact">
+	<section class="panel uplink" aria-labelledby="contact-title">
+		<h1 class="panel-bar" id="contact-title"><span class="badge">@</span>Contact</h1>
+
+		<div class="intro">
+			<Portrait
+				src={idPortrait}
+				alt="Portrait of Martin Liu in a navy suit and tie"
+				kind="id"
+				labels={{ topLeft: 'ID bev8au', topRight: 'Uplink' }}
+				caption={{ title: 'Liu, Martin', sub: 'Charlottesville, VA' }}
+				face={{ left: 32, top: 9, width: 37, height: 38 }}
+				sizes="(max-width: 640px) 40vw, 150px"
+				loading="eager"
+			/>
+			<div class="intro-text">
+				<p class="headline">Get in touch</p>
+				<p class="lede">Connect with me on LinkedIn, or email me directly.</p>
+			</div>
+		</div>
+
+		<div class="channels">
+			<article class="channel primary" aria-labelledby="ch-linkedin">
+				<p class="kind" id="ch-linkedin">LinkedIn</p>
+				<p class="address">{handle}</p>
+				<p class="note">See my full profile and send a connection request.</p>
+				<a class="cta" href={profile.linkedin} target="_blank" rel="noopener"><span class="cta-gauge" aria-hidden="true"></span>Connect on LinkedIn</a>
+			</article>
+
+			<article class="channel" aria-labelledby="ch-email">
+				<p class="kind" id="ch-email">Email</p>
+				<p class="address">{profile.email}</p>
+				<p class="note">For anything longer than a LinkedIn message.</p>
+				<div class="actions">
+					<a class="cta" href={`mailto:${profile.email}`}><span class="cta-gauge" aria-hidden="true"></span>Email Martin</a>
+					<button class="cta copy" type="button" data-copy={profile.email}><span class="cta-gauge" aria-hidden="true"></span><span class="copy-label">Copy address</span></button>
+				</div>
+			</article>
+
+			<article class="channel" aria-labelledby="ch-cv">
+				<p class="kind" id="ch-cv">CV</p>
+				<p class="address">One page, PDF</p>
+				<p class="note">Education, internships, and leadership, updated {profile.cvUpdated}.</p>
+				<a class="cta" href="/cv/"><span class="cta-gauge" aria-hidden="true"></span>View CV</a>
+			</article>
+		</div>
+
+		<p class="base">Based in {profile.location} <span class="sep">//</span> UVA McIntire School of Commerce</p>
+	</section>
+</ConsoleLayout>
+
+<script>
+	// Copy the email address; the label confirms, then resets
+	document.querySelectorAll<HTMLButtonElement>('.copy').forEach((btn) => {
+		const label = btn.querySelector('.copy-label')!;
+		btn.addEventListener('click', async () => {
+			try {
+				await navigator.clipboard.writeText(btn.dataset.copy!);
+				label.textContent = 'Copied';
+			} catch {
+				label.textContent = 'Copy failed, select the address';
+			}
+			setTimeout(() => { label.textContent = 'Copy address'; }, 2000);
+		});
+	});
+</script>
+
+<style>
+	.uplink { margin: 12px 8px 0; }
+	.panel-bar { margin: 0; }
+	/* Small ID portrait beside the heading */
+	.intro { padding: 28px 28px 20px; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 24px; align-items: center; }
+	.intro-text { display: grid; gap: 8px; }
+	.headline { margin: 0; font: 400 clamp(1.5rem, 3.6vw, 2.2rem)/1.15 var(--display); letter-spacing: 0.03em; }
+	.lede { margin: 0; font-size: 1.05rem; color: var(--ice); }
+
+	.channels { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; padding: 0 8px; }
+	.channel { display: grid; align-content: start; gap: 8px; padding: 20px 20px 16px; background: rgba(29, 40, 64, 0.65); border: 1px solid #4d6088; }
+	.channel p { margin: 0; }
+	/* LinkedIn is the main channel: lit edge and a larger address */
+	.primary { border-color: rgba(242, 177, 59, 0.55); box-shadow: inset 3px 0 0 var(--amber); background: linear-gradient(180deg, rgba(74, 93, 134, 0.35), rgba(29, 40, 64, 0.65)); }
+	.kind { font: 400 0.72rem/1.3 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--plate-hi); }
+	.primary .kind { color: var(--amber); }
+	.address { font: 600 1.1rem/1.3 var(--data); letter-spacing: 0.03em; color: #fff; overflow-wrap: anywhere; }
+	.primary .address { font-size: 1.3rem; }
+	.note { font-size: 0.92rem; line-height: 1.5; color: var(--dim); }
+	.channel .cta { margin-top: 6px; }
+	.actions { display: flex; flex-wrap: wrap; gap: 0 18px; }
+	button.cta { border: 0; background: none; cursor: pointer; font: 600 0.95rem/1 var(--data); }
+
+	.base { margin: 0; padding: 18px 28px 22px; font: 600 0.88rem/1.3 var(--data); letter-spacing: 0.04em; color: var(--dim); }
+
+	@media (max-width: 900px) {
+		.channels { grid-template-columns: 1fr; }
+	}
+	@media (max-width: 640px) {
+		.intro { padding: 22px 16px 16px; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
+		.base { padding: 16px 16px 18px; }
+	}
+</style>
