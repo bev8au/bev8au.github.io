@@ -5,7 +5,7 @@ import { profile } from '../data/profile';
 import Portrait from '../components/Portrait.astro';
 import fieldPhoto from '../assets/portraits/field-photo.jpg';
 // Design D: Mission debrief. Projects orbit a home star on a tactical plot; orbit radius is the launch year.
-// Clicking a target locks on and swaps the debrief panel. Motion language borrowed from 2Advanced V3.
+// Clicking a target flies the camera in for a full-screen close-up debrief. Motion language borrowed from 2Advanced V3.
 const sorties = [
 	{
 		id: 'MLU-07', name: 'Goldman Sachs GH', kind: 'Investment banking intern', year: 2026, phase: 0.6, status: 'complete', look: 'gas', size: 0.85,
@@ -51,6 +51,26 @@ const sorties = [
 	},
 ];
 const statusText = { flight: 'In flight', complete: 'Complete' };
+
+// Close-ups: picking a body flies the camera to it, and these callouts point at it.
+// The home star comes first, then the sorties in launch order, which is also the order Prev and Next step through.
+const closeups = [
+	{
+		id: 'sun', desig: 'SOL', name: profile.name, kind: 'Home star. BS Commerce, class of 2027', status: 'home', statusText: 'Pilot dossier',
+		points: profile.about.map((p) => ({ label: p.label, text: p.text })),
+		link: { href: '/cv/', label: 'View CV' },
+	},
+	...[...sorties].reverse().map((s) => ({
+		id: s.id, desig: s.id, name: s.name, kind: `${s.kind}, launched ${s.year}`, status: s.status, statusText: statusText[s.status],
+		points: [
+			{ label: 'Objective', text: s.objective },
+			{ label: 'Outcome', text: s.outcome },
+			{ label: 'Focus', text: s.focus },
+			{ label: 'Where and when', text: `${s.place}. ${s.dates}` },
+		],
+		link: { href: '/experience/', label: 'See the full record' },
+	})),
+];
 
 // Milestones from the résumé; the Experience page has the full record
 const log = [
@@ -144,7 +164,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 								{tabs.map((t) => <a href={t.href}>{t.label}</a>)}
 							</nav>
 						</header>
-						<p class="immersive-hint" aria-hidden="true">Drag to look around, scroll to zoom. Pick a planet to open its debrief.</p>
+						<p class="immersive-hint" aria-hidden="true">Drag to look around, scroll to zoom. Pick a planet, or the sun, to fly in for its debrief.</p>
 						<button class="full-view" type="button" aria-label="Return to the full-screen view">
 							<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4" /></svg>
 							Full view
@@ -165,48 +185,43 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 							<p>Tracking {sorties.length} objects</p>
 						</div>
 						<ul class="targets" aria-label="Sorties on the plot">
+							<li>
+								<button class="target home" type="button" data-id="sun" aria-label="Martin Liu, the home star. Open the pilot dossier">
+									<span class="marker"></span>
+									<span class="tag"><i class="glyph"></i><b>SOL</b> Martin Liu, pilot dossier</span>
+								</button>
+							</li>
 							{sorties.map((s) => (
 								<li>
-									<button class:list={['target', s.status]} type="button" data-id={s.id} aria-label={`${s.id}, ${s.name}. Show debrief`}>
+									<button class:list={['target', s.status]} type="button" data-id={s.id} aria-label={`${s.id}, ${s.name}. Fly in for its debrief`}>
 										<span class="marker"></span>
-										<span class="brackets"></span>
 										<span class="tag"><i class="glyph"></i><b>{s.id}</b> {s.name}</span>
 									</button>
 								</li>
 							))}
 						</ul>
-					</div>
-
-					<aside class="debrief empty" aria-live="polite">
-						<div class="debrief-bar">
-							<span class="badge">D</span>
-							<span>Sortie debrief</span>
-						</div>
-						<div class="debrief-body">
-							<div class="empty-note">
-								<p class="empty-title">No sortie selected</p>
-								<p>Pick a planet on the plot, or a row in the sortie register, to read its debrief.</p>
+						<section class="closeup" aria-label="Close-up debrief" inert>
+							<svg class="cu-lines" aria-hidden="true">
+								<circle class="cu-reticle" r="0" />
+								<circle class="cu-reticle fine" r="0" />
+								<g class="cu-leaders"></g>
+							</svg>
+							<div class="cu-sheet" data-nodrag>
+								<header class="cu-title" aria-live="polite">
+									<p class="cu-head"><span class="cu-desig"></span><span class="cu-status"></span></p>
+									<h2 class="cu-name"></h2>
+									<p class="cu-kind"></p>
+									<a class="cu-link cta" href="/experience/"><span class="cta-gauge" aria-hidden="true"></span><span class="cu-link-text"></span></a>
+								</header>
+								<ol class="cu-points"></ol>
 							</div>
-							<div class="debrief-head">
-								<span class="desig" data-f="id"></span>
-								<span class="status" data-f="status"></span>
-							</div>
-							<h1 class="sortie-name" data-f="name"></h1>
-							<p class="sortie-kind" data-f="kind"></p>
-							<dl class="brief">
-								<dt>Objective</dt><dd data-f="objective"></dd>
-								<dt>Outcome</dt><dd data-f="outcome"></dd>
-							</dl>
-							<dl class="kv">
-								<div><dt>Focus</dt><dd data-f="focus"></dd></div>
-								<div><dt>Location</dt><dd data-f="place"></dd></div>
-								<div><dt>Dates</dt><dd data-f="dates"></dd></div>
-							</dl>
-							<a class="cta" href="/experience/"><span class="cta-gauge" aria-hidden="true"></span>See the full record</a>
-						</div>
-						<span class="wipe" aria-hidden="true"></span>
-					</aside>
-				</section>
+							<nav class="cu-bar" data-nodrag aria-label="Close-up">
+								<button class="cu-step" type="button" data-step="-1"><span aria-hidden="true">‹</span> <span class="cu-step-name"></span></button>
+								<button class="cu-back" type="button">Back to system <kbd>Esc</kbd></button>
+								<button class="cu-step" type="button" data-step="1"><span class="cu-step-name"></span> <span aria-hidden="true">›</span></button>
+							</nav>
+						</section>
+					</div>				</section>
 
 				<div class="strip" data-boot style="--i:3">
 					<a href="#sorties">Scroll for the full debrief</a>
@@ -285,8 +300,9 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 								face={{ left: 36, top: 20, width: 29, height: 30 }}
 								sizes="(max-width: 640px) 60vw, 180px"
 							/>
-							<p class="lede">I study commerce at UVA's McIntire School, concentrating in finance with a minor in computer science. I came to finance from astronomy, and I still like to work things out from first principles.</p>
-							<p>Outside class I captain the UVA Chinese Basketball Team, play piano, and keep an eye on the night sky.</p>
+							<div class="bio">
+								{profile.about.map((p, i) => <p class:list={{ lede: i === 0 }}>{p.text}</p>)}
+							</div>
 							<dl class="kv">
 								<div><dt>Callsign</dt><dd>bev8au</dd></div>
 								<div><dt>Home base</dt><dd>Charlottesville, VA</dd></div>
@@ -316,9 +332,10 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 		</div>
 
 		<script type="application/json" id="sortie-data" set:html={JSON.stringify(sorties.map((s) => ({ ...s, statusText: statusText[s.status] })))} />
+		<script type="application/json" id="closeup-data" set:html={JSON.stringify(closeups)} />
 
 		<script>
-			import { createPlot, type Look } from '../scripts/debrief-plot';
+			import { createPlot, type CloseFrame, type Look } from '../scripts/debrief-plot';
 
 			type Sortie = {
 				id: string; name: string; kind: string; year: number; phase: number; status: string; statusText: string;
@@ -326,13 +343,13 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			};
 			const sorties: Sortie[] = JSON.parse(document.getElementById('sortie-data')!.textContent!);
 			const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-			let current = '';
 
 			// ---------- Tactical plot: three.js scene, HTML targets track it ----------
 			const plot = document.querySelector<HTMLElement>('.plot')!;
 			const targetsLayer = plot.querySelector<HTMLElement>('.targets')!;
 			const buttons = new Map<string, HTMLButtonElement>();
-			targetsLayer.querySelectorAll<HTMLButtonElement>('.target').forEach((b) => buttons.set(b.dataset.id!, b));
+			targetsLayer.querySelectorAll<HTMLButtonElement>('.target:not(.home)').forEach((b) => buttons.set(b.dataset.id!, b));
+			const sunBtn = targetsLayer.querySelector<HTMLButtonElement>('.target.home')!;
 			const marks = new Map<string, HTMLElement>();
 			plot.querySelectorAll<HTMLElement>('.yr').forEach((m) => marks.set(m.dataset.key!, m));
 
@@ -347,14 +364,157 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			addEventListener('resize', measureTags);
 			let hoveredId = '';
 
+			// ---------- Close-up: the camera flies to one body, and callouts point at it from its night side ----------
+			// Declared before the plot because the plot draws its first frame as soon as it is created
+			type Closeup = {
+				id: string; desig: string; name: string; kind: string; status: string; statusText: string;
+				points: { label: string; text: string }[]; link: { href: string; label: string };
+			};
+			const closeups: Closeup[] = JSON.parse(document.getElementById('closeup-data')!.textContent!);
+			const cu = plot.querySelector<HTMLElement>('.closeup')!;
+			const cuLeaders = cu.querySelector<SVGGElement>('.cu-leaders')!;
+			const cuRings = [...cu.querySelectorAll<SVGCircleElement>('.cu-reticle')];
+			const cuPoints = cu.querySelector<HTMLOListElement>('.cu-points')!;
+			const SVG_NS = 'http://www.w3.org/2000/svg';
+			let cuId = '';
+			let cuLabels: { x: number; y: number }[] = []; // each callout label's left middle, in plot px
+			let readyTimer = 0;
+
+			// Wide screens hold the body left of center with the callouts beside it; narrow ones put it on top and stack the text below
+			function cuFrame(): CloseFrame {
+				const w = plot.clientWidth, h = plot.clientHeight;
+				const narrow = w < 760 || w / h < 0.95;
+				const f = narrow ? { x: 0.5, y: 0.32, r: Math.min(w * 0.34, h * 0.17) } : { x: 0.29, y: 0.6, r: Math.min(h * 0.34, w * 0.21) };
+				cu.classList.toggle('narrow', narrow);
+				cu.style.setProperty('--cu-col', `${Math.round(f.x * w + f.r + 96)}px`);
+				cu.style.setProperty('--cu-top', `${Math.round(f.y * h + f.r + 28)}px`);
+				return f;
+			}
+
+			function measureCloseup() {
+				const box = plot.getBoundingClientRect();
+				cuLabels = [...cuPoints.querySelectorAll('.cu-label')].map((l) => {
+					const r = l.getBoundingClientRect();
+					return { x: r.left - box.left, y: r.top + r.height / 2 - box.top };
+				});
+			}
+
+			function fillCloseup(c: Closeup) {
+				cu.querySelector('.cu-desig')!.textContent = c.desig;
+				const status = cu.querySelector('.cu-status')!;
+				status.textContent = c.statusText;
+				status.className = `cu-status ${c.status}`;
+				cu.querySelector('.cu-name')!.textContent = c.name;
+				cu.querySelector('.cu-kind')!.textContent = c.kind;
+				const link = cu.querySelector<HTMLAnchorElement>('.cu-link')!;
+				link.href = c.link.href;
+				link.querySelector('.cu-link-text')!.textContent = c.link.label;
+				cuPoints.replaceChildren(...c.points.map((p, i) => {
+					const li = document.createElement('li');
+					li.className = 'cu-point';
+					li.style.setProperty('--i', String(i));
+					const label = document.createElement('p');
+					label.className = 'cu-label';
+					const num = document.createElement('b');
+					num.textContent = String(i + 1).padStart(2, '0');
+					label.append(num, p.label);
+					const text = document.createElement('p');
+					text.className = 'cu-text';
+					text.textContent = p.text;
+					li.append(label, text);
+					return li;
+				}));
+				cuLeaders.replaceChildren(...c.points.map((_, i) => {
+					const g = document.createElementNS(SVG_NS, 'g');
+					g.style.setProperty('--i', String(i));
+					const path = document.createElementNS(SVG_NS, 'path');
+					path.setAttribute('pathLength', '1');
+					const halo = document.createElementNS(SVG_NS, 'circle');
+					halo.setAttribute('r', '6');
+					halo.classList.add('halo');
+					const dot = document.createElementNS(SVG_NS, 'circle');
+					dot.setAttribute('r', '2.5');
+					dot.classList.add('dot');
+					g.append(path, halo, dot);
+					return g;
+				}));
+				const at = closeups.indexOf(c);
+				cu.querySelectorAll<HTMLButtonElement>('.cu-step').forEach((b) => {
+					const step = Number(b.dataset.step);
+					const t = closeups[(at + step + closeups.length) % closeups.length];
+					b.dataset.id = t.id;
+					b.querySelector('.cu-step-name')!.textContent = `${t.desig} ${t.name}`;
+					b.setAttribute('aria-label', `${step < 0 ? 'Previous' : 'Next'}: ${t.name}`);
+				});
+				measureCloseup();
+			}
+
+			// Every frame: a reticle rings the body, and a leader runs from a point on its disc to each callout
+			function drawCloseup(p: { x: number; y: number; r: number }) {
+				cuRings.forEach((c, i) => {
+					c.setAttribute('cx', String(p.x));
+					c.setAttribute('cy', String(p.y));
+					c.setAttribute('r', String(p.r * (i ? 1.15 : 1.07)));
+				});
+				const n = cuLabels.length;
+				[...cuLeaders.children].forEach((g, i) => {
+					const label = cuLabels[i];
+					if (!label) return;
+					const a = ((-48 + (96 * i) / Math.max(n - 1, 1)) * Math.PI) / 180;
+					const ax = p.x + Math.cos(a) * p.r * 0.94, ay = p.y + Math.sin(a) * p.r * 0.94;
+					const end = label.x - 12;
+					g.children[0].setAttribute('d', `M${ax},${ay} L${end - 40},${label.y} L${end},${label.y}`);
+					for (const c of [g.children[1], g.children[2]]) {
+						c.setAttribute('cx', String(ax));
+						c.setAttribute('cy', String(ay));
+					}
+				});
+			}
+
+			function openCloseup(id: string) {
+				const c = closeups.find((x) => x.id === id);
+				if (!c || id === cuId) return;
+				const switching = !!cuId;
+				cuId = id;
+				hoveredId = '';
+				plot.classList.add('cu-on');
+				cu.inert = false;
+				cu.classList.remove('ready');
+				scene.closeup(id, cuFrame());
+				// The text waits for the camera to arrive
+				clearTimeout(readyTimer);
+				const show = () => { fillCloseup(c); cu.classList.add('ready'); };
+				if (reduced) show();
+				else readyTimer = window.setTimeout(show, switching ? 1100 : 1300);
+			}
+
+			function closeCloseup() {
+				if (!cuId) return;
+				cuId = '';
+				clearTimeout(readyTimer);
+				cu.classList.remove('ready');
+				plot.classList.remove('cu-on');
+				cu.inert = true;
+				scene.closeup('', cuFrame());
+			}
+
 			const scene = createPlot(plot, sorties, {
 				reduced,
 				zoomNeedsModifier: () => !document.documentElement.classList.contains('immersive'),
-				onFrame(bodies, labels) {
+				onFrame(bodies, labels, sun) {
 					const w = plot.clientWidth;
-					// Place labels in priority order (locked, hovered, then nearer and larger planets);
+					if (cuId) {
+						const p = cuId === 'sun' ? sun : bodies.find((b) => b.key === cuId);
+						if (p) drawCloseup(p);
+					}
+					// The star's hit area takes in some of its glow; its label only shows on hover, so it never crowds the planets'
+					const sunR = Math.max(sun.r * 1.4, 14);
+					sunBtn.style.transform = `translate(${sun.x}px, ${sun.y}px)`;
+					sunBtn.style.setProperty('--r', `${sunR}px`);
+					sunBtn.classList.toggle('flip', sun.x > w * 0.6);
+					// Place labels in priority order (hovered, then nearer and larger planets);
 					// a label that would overlap one already placed fades out until its planet is hovered
-					const priority = (key: string, r: number) => (key === current ? 1e6 : key === hoveredId ? 1e5 : r);
+					const priority = (key: string, r: number) => (key === hoveredId ? 1e5 : r);
 					const placed: { l: number; t: number; r: number; b: number }[] = [];
 					for (const b of [...bodies].sort((a, z) => priority(z.key, z.r) - priority(a.key, a.r))) {
 						const btn = buttons.get(b.key)!;
@@ -369,7 +529,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 						const top = b.y - r + 2 - size.h;
 						const box = { l: left, t: top, r: left + size.w, b: top + size.h };
 						const overlaps = placed.some((p) => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t);
-						const hide = overlaps && b.key !== current && b.key !== hoveredId;
+						const hide = overlaps && b.key !== hoveredId;
 						btn.classList.toggle('tag-hidden', hide);
 						if (!hide) placed.push(box);
 					}
@@ -384,55 +544,25 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			targetsLayer.addEventListener('focusin', (e) => { hoveredId = targetId(e); scene.setPaused(true); });
 			targetsLayer.addEventListener('focusout', () => { hoveredId = ''; scene.setPaused(false); });
 
-			// ---------- Debrief panel ----------
-			const panel = document.querySelector<HTMLElement>('.debrief')!;
-			const fields = panel.querySelectorAll<HTMLElement>('[data-f]');
-
-			function fill(s: Sortie) {
-				fields.forEach((el) => {
-					const f = el.dataset.f!;
-					if (f === 'status') {
-						el.textContent = s.statusText;
-						el.className = `status ${s.status}`;
-					} else if (f === 'kind') {
-						el.textContent = `${s.kind}, launched ${s.year}`;
-					} else {
-						el.textContent = (s as any)[f];
-					}
-				});
+			// Every body on the plot, the home star included, and every register row opens its close-up; each close-up has its own hash
+			const isCloseup = (id: string) => closeups.some((c) => c.id === id);
+			function goCloseup(id: string, replace = false) {
+				if (replace) history.replaceState(null, '', `#${id}`);
+				else if (location.hash !== `#${id}`) history.pushState(null, '', `#${id}`);
+				route();
 			}
-
-			function select(id: string) {
-				if (id === current) return;
-				const s = sorties.find((x) => x.id === id);
-				if (!s) return;
-				const first = !current;
-				current = id;
-				panel.classList.remove('empty');
-				scene.focus(id);
-				// The camera glides toward the target first, then the brackets snap on
-				buttons.forEach((b) => b.classList.remove('locked'));
-				const lock = () => { if (current === id) buttons.get(id)!.classList.add('locked'); };
-				if (reduced) lock();
-				else setTimeout(lock, 650);
-				document.querySelectorAll<HTMLButtonElement>('.reg-row').forEach((r) => r.setAttribute('aria-pressed', String(r.dataset.id === id)));
-				if (first || reduced) return fill(s);
-				panel.classList.remove('swap');
-				void panel.offsetWidth;
-				panel.classList.add('swap');
-				setTimeout(() => fill(s), 190);
-			}
-
-			buttons.forEach((b) => b.addEventListener('click', () => {
-				select(b.dataset.id!);
-				if (root.classList.contains('immersive')) location.hash = 'debrief';
-			}));
-			document.querySelectorAll<HTMLButtonElement>('.reg-row').forEach((r) =>
-				r.addEventListener('click', () => {
-					select(r.dataset.id!);
-					document.getElementById('debrief')!.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
-				}),
-			);
+			buttons.forEach((b) => b.addEventListener('click', () => goCloseup(b.dataset.id!)));
+			sunBtn.addEventListener('click', () => goCloseup('sun'));
+			cu.querySelectorAll<HTMLButtonElement>('.cu-step').forEach((b) => b.addEventListener('click', () => goCloseup(b.dataset.id!, true)));
+			cu.querySelector('.cu-back')!.addEventListener('click', () => goFullView());
+			cuPoints.addEventListener('scroll', measureCloseup, { passive: true });
+			document.fonts?.ready.then(() => { if (cuId) measureCloseup(); });
+			addEventListener('resize', () => {
+				if (!cuId) return;
+				scene.setCloseFrame(cuFrame());
+				measureCloseup();
+			});
+			document.querySelectorAll<HTMLButtonElement>('.reg-row').forEach((r) => r.addEventListener('click', () => goCloseup(r.dataset.id!)));
 
 			// ---------- Full view and the console ----------
 			// The page lands on the full-screen solar system; the blue console powers on once a page is chosen.
@@ -463,17 +593,26 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 
 			function goFullView() {
 				if (location.hash) history.pushState(null, '', location.pathname + location.search);
+				closeCloseup();
 				closeConsole();
 			}
 
-			addEventListener('hashchange', () => {
+			function route() {
 				const page = location.hash.slice(1);
+				if (isCloseup(page)) {
+					closeConsole();
+					openCloseup(page);
+					return;
+				}
+				closeCloseup();
 				if (PAGES.includes(page)) openConsole(page);
 				else closeConsole();
-			});
-			addEventListener('popstate', () => { if (!location.hash) closeConsole(); });
+			}
+			addEventListener('hashchange', route);
+			addEventListener('popstate', route);
 			plot.querySelector('.full-view')!.addEventListener('click', goFullView);
-			addEventListener('keydown', (e) => { if (e.key === 'Escape' && !root.classList.contains('immersive')) goFullView(); });
+			addEventListener('keydown', (e) => { if (e.key === 'Escape' && (cuId || !root.classList.contains('immersive'))) goFullView(); });
+			if (isCloseup(location.hash.slice(1))) openCloseup(location.hash.slice(1));
 			// Let the first-visit boot finish, then drop its long delays so later openings use their own timing
 			if (root.classList.contains('boot')) setTimeout(() => root.classList.remove('boot'), 2800);
 
@@ -495,10 +634,9 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 		</script>
 
 		<style is:global>
-			/* ---------- Viewport: plot + debrief ---------- */
+			/* ---------- Viewport: the plot ---------- */
 			.viewport {
 				display: grid;
-				grid-template-columns: minmax(0, 1fr) 360px;
 				margin: 8px;
 				border: 1px solid #4d6088;
 				background: var(--hull-lo);
@@ -588,89 +726,17 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.tag b { font-weight: 600; color: var(--dim); margin-right: 3px; }
 			/* Targets on the right side of the plot put their tag on the left so it never clips */
 			.target.flip .tag { left: auto; right: calc(100% - 4px); border-left: 0; border-right: 1px solid var(--line); }
+			.target.home { cursor: pointer; }
+			.target.home .tag { opacity: 0; pointer-events: none; }
+			.target.home:hover .tag, .target.home:focus-visible .tag { opacity: 1; }
+			.target.home .glyph { border-color: var(--amber); background: var(--amber); }
 			.target:hover .tag, .target:focus-visible .tag { background: rgba(74, 93, 134, 0.7); }
 			.target:focus-visible { outline: none; }
 			.target:focus-visible .marker { border: 2px solid var(--amber); }
-			.brackets {
-				position: absolute;
-				inset: 0;
-				opacity: 0;
-				--c: var(--amber);
-				background:
-					linear-gradient(var(--c), var(--c)) top left / 9px 2px,
-					linear-gradient(var(--c), var(--c)) top left / 2px 9px,
-					linear-gradient(var(--c), var(--c)) top right / 9px 2px,
-					linear-gradient(var(--c), var(--c)) top right / 2px 9px,
-					linear-gradient(var(--c), var(--c)) bottom left / 9px 2px,
-					linear-gradient(var(--c), var(--c)) bottom left / 2px 9px,
-					linear-gradient(var(--c), var(--c)) bottom right / 9px 2px,
-					linear-gradient(var(--c), var(--c)) bottom right / 2px 9px;
-				background-repeat: no-repeat;
-			}
-			.target.locked .brackets { opacity: 1; animation: lock 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
-			.target.locked .tag { color: #fff; border-left-color: var(--amber); border-right-color: var(--amber); }
-			.target.locked .tag b { color: var(--amber); }
-			@keyframes lock {
-				0% { opacity: 0; transform: scale(2.2) rotate(45deg); }
-				60% { opacity: 1; }
-				100% { transform: scale(1) rotate(0); }
-			}
-
-			.debrief {
-				position: relative;
-				display: flex;
-				flex-direction: column;
-				border-left: 1px solid #4d6088;
-				background: linear-gradient(180deg, #2c3b5a, var(--hull));
-				overflow: hidden;
-			}
-			.debrief-body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
-			.empty-note { display: none; }
-			.debrief.empty .debrief-body > :not(.empty-note) { display: none; }
-			.debrief.empty .empty-note { display: grid; gap: 8px; align-content: center; flex: 1; color: var(--dim); max-width: 34ch; }
-			.empty-title { font: 400 1rem/1.3 var(--display); letter-spacing: 0.04em; color: var(--ice); }
-			.debrief-head { display: flex; justify-content: space-between; align-items: center; }
-			.desig { font: 600 0.95rem/1 var(--data); letter-spacing: 0.08em; color: var(--dim); }
-			.status {
-				font: 600 0.8rem/1 var(--data);
-				letter-spacing: 0.05em;
-				padding: 4px 8px 3px;
-				border: 1px solid var(--line);
-				color: var(--ice);
-			}
-			.status.flight { color: var(--void); background: var(--amber); border-color: var(--amber); }
-			.sortie-name {
-				font: 400 clamp(1.5rem, 3vw, 1.9rem)/1.15 var(--display);
-				letter-spacing: 0.02em;
-				margin-top: 2px;
-			}
-			.sortie-kind { font: 500 0.95rem/1 var(--data); color: var(--dim); letter-spacing: 0.03em; }
-			.brief { display: grid; gap: 4px; border-top: 1px dotted rgba(196, 212, 238, 0.4); padding-top: 14px; }
-			.brief dt, .kv dt { font: 600 0.78rem/1.3 var(--data); letter-spacing: 0.06em; color: var(--dim); }
-			.brief dd { font-size: 0.97rem; line-height: 1.5; margin-bottom: 8px; max-width: 60ch; }
 			.kv { display: grid; gap: 6px; }
+			.kv dt { font: 600 0.78rem/1.3 var(--data); letter-spacing: 0.06em; color: var(--dim); }
 			.kv div { display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: baseline; }
 			.kv dd { font: 500 0.98rem/1.35 var(--data); letter-spacing: 0.02em; }
-
-			/* Panel swap: a bright bar wipes across, content changes underneath */
-			.wipe {
-				position: absolute;
-				inset: 26px 0 0;
-				background: linear-gradient(90deg, #c9d6ea, #fff);
-				transform: scaleX(0);
-				pointer-events: none;
-			}
-			.debrief.swap .wipe { animation: wipe 0.42s cubic-bezier(0.7, 0, 0.3, 1); }
-			.debrief.swap .debrief-body { animation: flicker 0.6s steps(1) 0.2s; }
-			@keyframes wipe {
-				0% { transform: scaleX(0); transform-origin: left; }
-				45% { transform: scaleX(1); transform-origin: left; }
-				46% { transform: scaleX(1); transform-origin: right; }
-				100% { transform: scaleX(0); transform-origin: right; }
-			}
-			@keyframes flicker {
-				0% { opacity: 0.4; } 20% { opacity: 1; } 35% { opacity: 0.6; } 50% { opacity: 1; }
-			}
 
 			.strip {
 				display: flex;
@@ -692,7 +758,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			/* ---------- Lower panels ---------- */
 			.trio, .duo { display: grid; gap: 8px; margin: 12px 8px 0; }
 			.trio { grid-template-columns: 1.25fr 1fr 0.9fr; }
-			.duo { grid-template-columns: 1.3fr 1fr; }
+			.duo { grid-template-columns: 1.8fr 1fr; }
 			.register { margin: 12px 8px 0; }
 
 			.log { padding: 14px 16px 16px; display: grid; gap: 0; position: relative; }
@@ -750,8 +816,6 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				position: relative;
 			}
 			.reg-row:hover { background: rgba(122, 141, 176, 0.14); }
-			.reg-row[aria-pressed='true'] { background: rgba(242, 177, 59, 0.08); }
-			.reg-row[aria-pressed='true']::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: var(--amber); }
 			.r-id, .r-year { font: 600 0.95rem/1 var(--data); letter-spacing: 0.06em; color: var(--dim); font-variant-numeric: tabular-nums; }
 			.r-name { font-weight: 600; }
 			.r-kind { color: var(--dim); }
@@ -760,13 +824,13 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.r-status.flight { color: var(--amber); }
 			.r-status.flight::before { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; }
 
-			/* Field photo in its own column; the text runs beside it */
-			.dossier { padding: 16px 18px 18px; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px 20px; align-content: start; }
-			.dossier > .portrait { grid-row: 1 / span 3; }
-			.dossier > :not(.portrait) { grid-column: 2; }
+			/* Field photo floats left; the bio wraps beside it and then runs under it */
+			.dossier { padding: 16px 18px 18px; display: flow-root; }
+			.dossier > .portrait { float: left; width: 180px; margin: 0 20px 10px 0; }
 			.lede { font-size: 1.08rem; line-height: 1.5; max-width: 62ch; }
-			.dossier > p:not(.lede) { color: var(--dim); max-width: 62ch; }
-			.dossier .kv { border-top: 1px dotted rgba(196, 212, 238, 0.4); padding-top: 12px; }
+			.bio p + p { margin-top: 12px; }
+			.bio p:not(.lede) { color: var(--dim); }
+			.dossier .kv { clear: both; margin-top: 14px; border-top: 1px dotted rgba(196, 212, 238, 0.4); padding-top: 12px; }
 			.dossier .kv div { grid-template-columns: 100px 1fr; }
 			.uplink { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 4px; }
 			.uplink p { color: var(--dim); margin-bottom: 8px; }
@@ -820,7 +884,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.immersive-bar, .immersive-hint { display: none; }
 			.immersive, .immersive body { overflow: hidden; }
 			.immersive .chassis { max-width: none; min-height: 0; padding: 0; border: 0; box-shadow: none; background: #05070d; }
-			.immersive .plate, .immersive .tabs, .immersive .debrief, .immersive .strip,
+			.immersive .plate, .immersive .tabs, .immersive .strip,
 			.immersive .trio, .immersive .register, .immersive .duo, .immersive .foot, .immersive .full-view { display: none; }
 			.immersive .viewport { display: block; margin: 0; border: 0; box-shadow: none; }
 			.immersive .plot { height: 100vh; height: 100dvh; }
@@ -886,6 +950,129 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.full-view svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 			.full-view:hover { border-color: var(--amber); color: #fff; }
 
+			/* ---------- Close-up: one body fills the space view, callouts point at it ---------- */
+			.plot .targets, .plot .marks, .plot .hud, .immersive-hint { transition: opacity 0.4s, visibility 0s; }
+			.cu-on .targets, .cu-on .marks, .cu-on .hud, .cu-on .immersive-hint { opacity: 0; visibility: hidden; transition: opacity 0.4s, visibility 0s 0.4s; }
+			.closeup {
+				position: absolute;
+				inset: 0;
+				z-index: 1;
+				opacity: 0;
+				visibility: hidden;
+				pointer-events: none;
+				transition: opacity 0.5s, visibility 0s 0.5s;
+			}
+			.cu-on .closeup { opacity: 1; visibility: visible; transition: opacity 0.5s; }
+			/* Scrims keep the text legible over bright stars and planets: down the right side, and under the top bar */
+			.closeup::before {
+				content: '';
+				position: absolute;
+				inset: 0;
+				background:
+					linear-gradient(270deg, rgba(3, 5, 10, 0.82) 0%, rgba(3, 5, 10, 0.5) 34%, transparent 58%),
+					linear-gradient(180deg, rgba(3, 5, 10, 0.6), transparent 32%),
+					linear-gradient(0deg, rgba(3, 5, 10, 0.55), transparent 16%);
+			}
+			.cu-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+			.cu-reticle { fill: none; stroke: rgba(228, 236, 247, 0.28); stroke-width: 1; }
+			.cu-reticle.fine { stroke: rgba(242, 177, 59, 0.5); stroke-dasharray: 2 9; transform-box: fill-box; transform-origin: center; animation: cu-turn 60s linear infinite; }
+			@keyframes cu-turn { to { rotate: 360deg; } }
+			.cu-leaders path { fill: none; stroke: rgba(228, 236, 247, 0.6); stroke-width: 1; stroke-dasharray: 1; stroke-dashoffset: 1; }
+			.cu-leaders .dot { fill: var(--amber); opacity: 0; }
+			.cu-leaders .halo { fill: none; stroke: var(--amber); stroke-width: 1; opacity: 0; transform-box: fill-box; transform-origin: center; }
+			.ready .cu-leaders path { stroke-dashoffset: 0; transition: stroke-dashoffset 0.7s cubic-bezier(0.6, 0, 0.2, 1) calc(0.15s + var(--i) * 0.12s); }
+			.ready .cu-leaders .dot { opacity: 1; transition: opacity 0.2s calc(var(--i) * 0.12s); }
+			.ready .cu-leaders .halo { animation: cu-ping 2.6s ease-out calc(var(--i) * 0.4s) infinite; }
+			@keyframes cu-ping { 0% { opacity: 0.8; scale: 0.4; } 70%, 100% { opacity: 0; scale: 1.8; } }
+
+			.cu-sheet { display: contents; }
+			.cu-title, .cu-points, .cu-bar { pointer-events: auto; }
+			.cu-title {
+				position: absolute;
+				top: 92px; left: 28px;
+				max-width: min(600px, 46vw);
+				text-shadow: 0 1px 14px rgba(0, 0, 0, 0.9);
+			}
+			.cu-head { display: flex; gap: 12px; align-items: center; font: 600 0.9rem/1 var(--data); letter-spacing: 0.1em; color: var(--dim); }
+			.cu-status { padding: 4px 8px 3px; font-size: 0.78rem; letter-spacing: 0.06em; color: var(--ice); border: 1px solid rgba(228, 236, 247, 0.3); text-shadow: none; }
+			.cu-status.flight { color: #0b0f18; background: var(--amber); border-color: var(--amber); }
+			.cu-status.home { color: var(--amber); border-color: rgba(242, 177, 59, 0.6); }
+			.cu-name { margin-top: 10px; font: 400 clamp(1.6rem, 2.8vw, 2.5rem)/1.1 var(--display); letter-spacing: 0.02em; color: #fff; }
+			.cu-kind { margin-top: 8px; font: 500 1.02rem/1.3 var(--data); letter-spacing: 0.04em; color: var(--dim); }
+			.cu-points {
+				position: absolute;
+				left: var(--cu-col); right: 32px;
+				top: 50%;
+				max-width: 500px;
+				max-height: calc(100% - 200px);
+				overflow-y: auto;
+				translate: 0 -50%;
+				display: grid;
+				gap: 18px;
+				padding: 4px 8px 4px 0;
+				scrollbar-width: thin;
+			}
+			.cu-label { display: flex; gap: 10px; align-items: baseline; font: 600 0.8rem/1.3 var(--data); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ice); }
+			.cu-label b { font-weight: 600; color: var(--amber); }
+			.cu-text { margin-top: 5px; font-size: 0.95rem; line-height: 1.5; color: #d3dcea; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9); }
+			.cu-title .cu-link { margin-top: 14px; }
+
+			/* Text arrives once the camera does: title first, then each callout after its leader */
+			.cu-title > *, .cu-point { opacity: 0; translate: -10px 0; transition: opacity 0.25s, translate 0.25s; }
+			.ready .cu-title > * { opacity: 1; translate: 0 0; transition: opacity 0.5s, translate 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+			.ready .cu-title > :nth-child(2) { transition-delay: 0.08s; }
+			.ready .cu-title > :nth-child(3) { transition-delay: 0.16s; }
+			.ready .cu-title > :nth-child(4) { transition-delay: 0.3s; }
+			.ready .cu-point { opacity: 1; translate: 0 0; transition: opacity 0.5s calc(0.45s + var(--i) * 0.12s), translate 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) calc(0.45s + var(--i) * 0.12s); }
+
+			.cu-bar {
+				position: absolute;
+				bottom: 20px; left: 50%;
+				translate: -50% 0;
+				display: flex;
+				gap: 6px;
+			}
+			.cu-bar button {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				padding: 9px 14px;
+				font: 600 0.82rem/1.2 var(--data);
+				letter-spacing: 0.06em;
+				white-space: nowrap;
+				color: var(--dim);
+				background: rgba(8, 12, 22, 0.6);
+				border: 1px solid rgba(228, 236, 247, 0.18);
+				backdrop-filter: blur(4px);
+				cursor: pointer;
+				transition: color 0.15s, border-color 0.15s;
+			}
+			.cu-bar button:hover { color: #fff; border-color: var(--amber); }
+			.cu-back { color: var(--ice) !important; }
+			.cu-back kbd { padding: 1px 5px; font: 600 0.7rem/1.2 var(--data); color: var(--dim); border: 1px solid rgba(228, 236, 247, 0.25); }
+			.cu-step-name { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+
+			/* Narrow screens: the body sits on top, the text scrolls in a sheet below it, and the leaders drop out */
+			.closeup.narrow::before { background: linear-gradient(0deg, rgba(3, 5, 10, 0.9) 0%, rgba(3, 5, 10, 0.7) 55%, transparent 72%), linear-gradient(180deg, rgba(3, 5, 10, 0.6), transparent 22%); }
+			.closeup.narrow .cu-leaders { display: none; }
+			.closeup.narrow .cu-sheet {
+				display: block;
+				position: absolute;
+				left: 0; right: 0;
+				top: var(--cu-top); bottom: 64px;
+				padding: 0 16px 20px;
+				overflow-y: auto;
+				pointer-events: auto;
+			}
+			.closeup.narrow .cu-title, .closeup.narrow .cu-points { position: static; max-width: none; max-height: none; translate: none; overflow: visible; }
+			.closeup.narrow .cu-name { font-size: 1.5rem; }
+			.closeup.narrow .cu-points { margin-top: 18px; padding: 0; }
+			.closeup.narrow .cu-bar { bottom: 14px; }
+			.closeup.narrow .cu-step-name, .closeup.narrow .cu-back kbd { display: none; }
+			@media (prefers-reduced-motion: reduce) {
+				.closeup *, .closeup *::before { transition: none !important; animation: none !important; }
+			}
+
 			/* Opening the console replays the power-on sequence, faster than the first-visit boot */
 			@media (prefers-reduced-motion: no-preference) {
 				.opening [data-boot] { animation: power-on 0.5s cubic-bezier(0.6, 0, 0.2, 1) backwards; animation-delay: calc(var(--i) * 0.08s); }
@@ -894,8 +1081,6 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 
 			/* ---------- Responsive ---------- */
 			@media (max-width: 980px) {
-				.viewport { grid-template-columns: 1fr; }
-				.debrief { border-left: 0; border-top: 1px solid #4d6088; }
 				.trio { grid-template-columns: 1fr 1fr; }
 				.trio > :first-child { grid-column: 1 / -1; }
 			}
@@ -918,11 +1103,8 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				.r-id { grid-area: id; font-size: 0.85rem; }
 				.r-kind { grid-area: kind; font-size: 0.85rem; text-align: right; }
 				.r-year { display: none; }
-				.debrief-body { padding: 18px 16px; }
 				.kv div, .dossier .kv div { grid-template-columns: 84px 1fr; }
-				.dossier { grid-template-columns: 1fr; }
-				.dossier > .portrait { grid-row: auto; width: min(220px, 62%); }
-				.dossier > :not(.portrait) { grid-column: 1; }
+				.dossier > .portrait { float: none; width: min(220px, 62%); margin: 0 0 14px; }
 			}
 		</style>
 	</body>

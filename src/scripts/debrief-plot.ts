@@ -15,10 +15,12 @@ export type BodySpec = { id: string; year: number; phase: number; look: Look; si
 export type ScreenPoint = { key: string; x: number; y: number; r: number };
 export type PlotOptions = {
 	reduced: boolean;
-	onFrame: (bodies: ScreenPoint[], labels: ScreenPoint[]) => void;
+	onFrame: (bodies: ScreenPoint[], labels: ScreenPoint[], sun: ScreenPoint) => void;
 	// When true, the wheel only zooms with Ctrl/⌘ held, so the page can still scroll past the plot
 	zoomNeedsModifier: () => boolean;
 };
+// Where a close-up puts its body: x and y as fractions of the frame, r as the body's radius in px
+export type CloseFrame = { x: number; y: number; r: number };
 
 const ORBIT: Record<number, number> = { 2023: 3.4, 2024: 5.2, 2025: 10, 2026: 12.6 };
 const BELT = [6.6, 8.6];
@@ -271,6 +273,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 			const t = loader.load(TEX + name, () => { if (opts.reduced || !raf) still(); });
 			t.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
 			t.anisotropy = 8;
+			t.wrapS = THREE.RepeatWrapping; // clouds and the star's surface drift in u, so maps must wrap rather than smear their edge
 			cache.set(key, t);
 		}
 		return cache.get(key)!;
@@ -325,7 +328,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 	}
 
 	// ---------- Radar disc: sweep wedge and bearing ticks on the orbital plane ----------
-	const sweepUniforms = { uSweep: { value: -Math.PI / 2 }, uR: { value: ORBIT[2026] + 0.6 }, uAmber: { value: AMBER }, uIce: { value: ICE } };
+	const sweepUniforms = { uSweep: { value: -Math.PI / 2 }, uR: { value: ORBIT[2026] + 0.6 }, uAmber: { value: AMBER }, uIce: { value: ICE }, uFade: { value: 1 } };
 	const disc = new THREE.Mesh(
 		new THREE.PlaneGeometry(32, 32),
 		new THREE.ShaderMaterial({
@@ -335,7 +338,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 			blending: THREE.AdditiveBlending,
 			vertexShader: /* glsl */ `varying vec2 vP; void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
 			fragmentShader: /* glsl */ `
-				uniform float uSweep; uniform float uR; uniform vec3 uAmber; uniform vec3 uIce; varying vec2 vP;
+				uniform float uSweep; uniform float uR; uniform vec3 uAmber; uniform vec3 uIce; uniform float uFade; varying vec2 vP;
 				void main() {
 					float r = length(vP);
 					float a = atan(vP.y, vP.x);
@@ -349,7 +352,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 					float tick = max(step(seg, 0.05) * band, step(major, 0.01) * step(uR + 0.2, r) * step(r, uR + 0.95));
 					float ring = 1.0 - smoothstep(0.0, 0.035, abs(r - (uR + 0.2)));
 					vec3 col = uAmber * (wedge * 0.07 + edge * 0.1) + uIce * (tick * 0.22 + ring * 0.14);
-					gl_FragColor = vec4(col, 1.0);
+					gl_FragColor = vec4(col * uFade, 1.0);
 				}
 			`,
 		}),
@@ -432,7 +435,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 	type Body = BodySpec & {
 		orbit: number; angle: number; speed: number; pivot: THREE.Group; spin: THREE.Mesh;
 		mat: THREE.ShaderMaterial; atmo: THREE.ShaderMaterial; ring?: { mesh: THREE.Mesh; mat: THREE.ShaderMaterial; inner: number; outer: number };
-		view: THREE.Vector3;
+		view: THREE.Vector3; scale: number;
 	};
 	const ringTex = tex('saturn_ring.png');
 	const bodies: Body[] = specs.map((s, index) => {
@@ -535,14 +538,8 @@ ${PLANET_FRAGMENT}`,
 		}
 
 		scene.add(pivot);
-		return { ...s, orbit, angle: s.phase, speed: 0.2 / Math.pow(orbit, 1.5), pivot, spin, mat, atmo, ring, view: new THREE.Vector3() };
+		return { ...s, orbit, angle: s.phase, speed: 0.2 / Math.pow(orbit, 1.5), pivot, spin, mat, atmo, ring, view: new THREE.Vector3(), scale: 1 };
 	});
-
-	// Dashed leader line from the star to the locked body
-	const leaderGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-	const leader = new THREE.Line(leaderGeo, new THREE.LineDashedMaterial({ color: AMBER, dashSize: 0.28, gapSize: 0.2, transparent: true, opacity: 0.75, depthWrite: false }));
-	leader.visible = false;
-	scene.add(leader);
 
 	// ---------- Post ----------
 	// HDR chain: scene (with depth) -> focus blur -> light rays + lens streak -> bloom -> tone map -> film
@@ -597,10 +594,10 @@ ${PLANET_FRAGMENT}`,
 
 		// Light rays streaming from the star past anything in front of it, plus a horizontal blue lens streak
 		rays = new ShaderPass({
-			uniforms: { tDiffuse: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.5) }, uSunOn: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
+			uniforms: { tDiffuse: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.5) }, uSunOn: { value: 0 }, uStreak: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) } },
 			vertexShader: SCREEN_VERTEX,
 			fragmentShader: /* glsl */ `
-				uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uSunOn; uniform vec2 uRes; varying vec2 vUv;
+				uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uSunOn; uniform float uStreak; uniform vec2 uRes; varying vec2 vUv;
 				void main() {
 					vec3 col = texture2D(tDiffuse, vUv).rgb;
 					vec3 glow = vec3(0.0);
@@ -622,7 +619,7 @@ ${PLANET_FRAGMENT}`,
 						vec3 s = max(texture2D(tDiffuse, vUv + vec2(px / uRes.x, 0.0)).rgb - 1.8, 0.0);
 						streak += s * exp(-abs(o) * 0.11);
 					}
-					streak = vec3(0.35, 0.55, 1.0) * dot(streak, vec3(0.33)) * 0.06;
+					streak = vec3(0.35, 0.55, 1.0) * dot(streak, vec3(0.33)) * 0.06 * uStreak;
 					gl_FragColor = vec4(col + glow * vec3(1.0, 0.85, 0.65) + streak, 1.0);
 				}
 			`,
@@ -658,7 +655,6 @@ ${PLANET_FRAGMENT}`,
 	const focus = new THREE.Vector3();
 	const focusGoal = new THREE.Vector3();
 	let zoom = 1, zoomGoal = 1;
-	let lockedId = '';
 	let paused = false;
 	// Viewer-controlled orbit around the focus point, layered on top of the idle drift
 	let userAz = 0, userEl = 0, velAz = 0, velEl = 0, dragging = false;
@@ -667,6 +663,13 @@ ${PLANET_FRAGMENT}`,
 	const pan = new THREE.Vector3(), panGoal = new THREE.Vector3();
 	const view = new THREE.Vector3(); // focus + pan: the point the camera orbits and looks at
 	let camAz = 0;
+
+	// ---------- Close-up: one body fills the frame while the page lays its debrief around it ----------
+	let closeId = '';
+	const closeFrame: CloseFrame = { x: 0.5, y: 0.5, r: 200 };
+	let azGoal = 0, elGoal = 0, steer = 0; // seconds left to swing the camera toward its goal angles
+	let shiftX = 0, shiftY = 0; // view offset in px: moves the focus point away from the frame center
+	let fade = 0; // 0 in the overview, 1 in a close-up; dims the radar disc and orbits
 
 	function placeCamera(t: number, k: number) {
 		focus.lerp(focusGoal, k);
@@ -677,20 +680,23 @@ ${PLANET_FRAGMENT}`,
 		view.copy(focus).add(pan);
 		camera.position.set(view.x + Math.sin(az) * Math.cos(el) * D, view.y + Math.sin(el) * D, view.z + Math.cos(az) * Math.cos(el) * D);
 		camera.lookAt(view);
+		if (Math.abs(shiftX) + Math.abs(shiftY) > 0.5) camera.setViewOffset(W, H, shiftX, shiftY, W, H);
+		else if (camera.view?.enabled) camera.clearViewOffset();
 		camera.updateMatrixWorld();
 	}
 
 	// Pull back only until the 2025 orbit fits; the outer orbit runs past the frame edges for a closer view
 	function fitCamera() {
 		const narrow = W / H < 1.2;
+		const oldElev = elev;
 		camera.fov = narrow ? 40 : 30;
 		// Tall portrait screens look down more steeply so the orbits fill the height
 		elev = W / H < 0.7 ? 0.95 : narrow ? 0.55 : 0.36;
 		camera.aspect = W / H;
 		camera.updateProjectionMatrix();
 		const probe = new THREE.Vector3();
-		const saved = { focus: focus.clone(), pan: pan.clone(), zoom, userAz, userEl, userZoom };
-		focus.set(0, 0, 0); pan.set(0, 0, 0); zoom = 1; userAz = 0; userEl = 0; userZoom = 1;
+		const saved = { focus: focus.clone(), pan: pan.clone(), zoom, userAz, userEl, userZoom, shiftX, shiftY };
+		focus.set(0, 0, 0); pan.set(0, 0, 0); zoom = 1; userAz = 0; userEl = 0; userZoom = 1; shiftX = 0; shiftY = 0;
 		for (fitD = 10; fitD < 120; fitD *= 1.03) {
 			placeCamera(0, 0);
 			let ok = true;
@@ -702,13 +708,16 @@ ${PLANET_FRAGMENT}`,
 			if (ok) break;
 		}
 		focus.copy(saved.focus); pan.copy(saved.pan); zoom = saved.zoom; userAz = saved.userAz; userEl = saved.userEl; userZoom = saved.userZoom;
+		shiftX = saved.shiftX; shiftY = saved.shiftY;
+		// A close-up keeps its own viewing angle when the screen's shape changes the base elevation
+		if (closeId) { userEl += oldElev - elev; elGoal += oldElev - elev; }
 	}
 
 	// ---------- Drag to orbit the camera ----------
 	const clampEl = () => { userEl = THREE.MathUtils.clamp(userEl, 0.07 - elev, 1.3 - elev); };
 	let lastX = 0, lastY = 0, lastT = 0;
 	container.addEventListener('pointerdown', (e) => {
-		if (e.button !== 0 || (e.target as Element).closest('button, a')) return;
+		if (e.button !== 0 || (e.target as Element).closest('button, a, [data-nodrag]')) return;
 		dragging = true;
 		lastX = e.clientX; lastY = e.clientY; lastT = e.timeStamp;
 		velAz = velEl = 0;
@@ -749,6 +758,7 @@ ${PLANET_FRAGMENT}`,
 	const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), hit = new THREE.Vector3(), tmpV = new THREE.Vector3();
 	container.addEventListener('wheel', (e) => {
 		if (opts.zoomNeedsModifier() && !e.ctrlKey && !e.metaKey) return;
+		if ((e.target as Element).closest('[data-nodrag]')) return; // let overlay text scroll
 		e.preventDefault();
 		const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * H : e.deltaY;
 		// Pinch gestures arrive as small Ctrl+wheel deltas, so they get a stronger response
@@ -762,7 +772,8 @@ ${PLANET_FRAGMENT}`,
 		ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
 		ray.setFromCamera(ndc, camera);
 		const { origin, direction } = ray.ray;
-		if (scale !== 1 && direction.y < -1e-3) {
+		// A close-up zooms straight in on its body instead
+		if (scale !== 1 && direction.y < -1e-3 && !closeId) {
 			hit.copy(origin).addScaledVector(direction, -origin.y / direction.y);
 			if (hit.length() < 40) {
 				const target = tmpV.copy(focus).add(panGoal); // where the view is heading
@@ -798,7 +809,7 @@ ${PLANET_FRAGMENT}`,
 	}
 
 	// ---------- Frame ----------
-	const tmp = new THREE.Vector3(), sunView = new THREE.Vector3(), nrm = new THREE.Vector3();
+	const tmp = new THREE.Vector3(), sunView = new THREE.Vector3(), nrm = new THREE.Vector3(), SUN_AT = new THREE.Vector3();
 	const tanHalf = () => Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 	let sweep = -Math.PI / 2;
 	let exposure = 1;
@@ -810,16 +821,21 @@ ${PLANET_FRAGMENT}`,
 		beltLayers.forEach((l) => { l.group.rotation.y -= dt * l.speed; });
 
 		for (const b of bodies) {
-			if (!paused) b.angle += dt * b.speed;
+			if (!paused && !closeId) b.angle += dt * b.speed;
 			b.pivot.position.set(Math.cos(b.angle) * b.orbit, 0, Math.sin(b.angle) * b.orbit);
 			b.spin.rotation.y += dt * 0.05;
+			// In a close-up the other planets shrink away so only the chosen one stands out
+			const goal = closeId && b.id !== closeId ? 0.3 : 1;
+			b.scale += (goal - b.scale) * (k === 1 ? 1 : 1 - Math.exp(-dt * 2.5));
+			b.pivot.scale.setScalar(b.scale);
 		}
 
-		const locked = bodies.find((b) => b.id === lockedId);
-		if (locked) {
-			// Outer planets sit near the frame edge in the close view, so pan further toward them
-			focusGoal.copy(locked.pivot.position).multiplyScalar(0.2 + 0.3 * THREE.MathUtils.smoothstep(locked.orbit, 5, 12.6));
-			zoomGoal = 0.9;
+		const close = bodies.find((b) => b.id === closeId);
+		if (closeId) {
+			// Fly in until the body's radius on screen matches the frame the page asked for
+			focusGoal.copy(close ? close.pivot.position : SUN_AT);
+			const reach = close ? close.size * (close.ring ? 1.9 : 1) : 1.1 * 1.6; // rings and the star's glow need room too
+			zoomGoal = reach / ((closeFrame.r / (H / 2)) * tanHalf()) / fitD;
 		} else {
 			focusGoal.set(0, 0, 0);
 			zoomGoal = 1;
@@ -827,6 +843,18 @@ ${PLANET_FRAGMENT}`,
 		const ease = 1 - Math.exp(-dt * 8);
 		userZoom += (userZoomGoal - userZoom) * ease;
 		pan.lerp(panGoal, ease);
+		const shiftGoalX = closeId ? (0.5 - closeFrame.x) * W : 0;
+		const shiftGoalY = closeId ? (0.5 - closeFrame.y) * H : 0;
+		shiftX += (shiftGoalX - shiftX) * k;
+		shiftY += (shiftGoalY - shiftY) * k;
+		fade += ((closeId ? 1 : 0) - fade) * (k === 1 ? 1 : 1 - Math.exp(-dt * 3));
+		// Swing the camera to the angle a close-up (or the overview) wants; a drag takes over at once
+		if (steer > 0 && !dragging) {
+			const s = k === 1 ? 1 : 1 - Math.exp(-dt * 2.2);
+			userAz += (azGoal - userAz) * s;
+			userEl += (elGoal - userEl) * s;
+			steer = k === 1 ? 0 : steer - dt;
+		}
 		if (!dragging && (velAz || velEl)) {
 			userAz += velAz * dt; userEl += velEl * dt;
 			clampEl();
@@ -845,41 +873,39 @@ ${PLANET_FRAGMENT}`,
 			u.uSunView.value.copy(sunView);
 			u.uTime.value = t;
 			u.uOccCount.value = Math.min(bodies.length, MAX_OCC);
-			bodies.slice(0, MAX_OCC).forEach((o, i) => (u.uOcc.value[i] as THREE.Vector4).set(o.view.x, o.view.y, o.view.z, o.size));
+			bodies.slice(0, MAX_OCC).forEach((o, i) => (u.uOcc.value[i] as THREE.Vector4).set(o.view.x, o.view.y, o.view.z, o.size * o.scale));
 			b.atmo.uniforms.uSun.value.copy(sunView).sub(b.view).normalize();
 			if (b.ring) {
 				nrm.set(0, 0, 1).transformDirection(b.ring.mesh.matrixWorld).transformDirection(camera.matrixWorldInverse);
 				u.uRingCenter.value.copy(b.view);
 				u.uRingNormal.value.copy(nrm);
+				u.uRingIn.value = b.ring.inner * b.scale;
+				u.uRingOut.value = b.ring.outer * b.scale;
 				const ru = b.ring.mat.uniforms;
 				ru.uSunView.value.copy(sunView);
 				ru.uNormal.value.copy(nrm);
-				ru.uPlanet.value.set(b.view.x, b.view.y, b.view.z, b.size);
+				ru.uPlanet.value.set(b.view.x, b.view.y, b.view.z, b.size * b.scale);
 			}
 		}
 
+		sweepUniforms.uFade.value = 1 - fade;
 		orbits.forEach((line, year) => {
-			const on = locked?.year === year;
-			(line.material as THREE.LineBasicMaterial).color.copy(on ? AMBER : ICE);
+			const mat = line.material as THREE.LineBasicMaterial;
+			mat.color.copy(close?.year === year ? AMBER : ICE);
+			mat.opacity = 1 - 0.75 * fade;
 			line.rotation.y = camAz; // keep the brighter half of each ring on the side nearest the camera
 		});
-		leader.visible = !!locked;
-		if (locked) {
-			const p = leaderGeo.attributes.position as THREE.BufferAttribute;
-			p.setXYZ(1, locked.pivot.position.x, 0, locked.pivot.position.z);
-			p.needsUpdate = true;
-			leader.computeLineDistances();
-		}
 
-		// Lens: focus on the locked planet, aim rays at the star, and let exposure adapt to how much star is in frame
+		// Lens: focus on the close-up body, aim rays at the star, and let exposure adapt to how much star is in frame
 		tmp.set(0, 0, 0).project(camera);
 		const sunR = (1.1 / (camera.position.length() * tanHalf())) * (H / 2);
 		const offscreen = Math.max(Math.abs(tmp.x) - 1, Math.abs(tmp.y) - 1, 0);
 		const sunOn = tmp.z < 1 ? 1 - THREE.MathUtils.smoothstep(offscreen, 0, 0.35) : 0;
-		if (dof) dof.uniforms.uFocus.value = camera.position.distanceTo(locked ? locked.pivot.position : view);
+		if (dof) dof.uniforms.uFocus.value = camera.position.distanceTo(closeId ? focus : view);
 		if (rays) {
 			rays.uniforms.uSun.value.set((tmp.x + 1) / 2, (tmp.y + 1) / 2);
 			rays.uniforms.uSunOn.value = sunOn;
+			rays.uniforms.uStreak.value = 1 - fade; // a planet filling the frame would smear its sun glint into bands
 		}
 		const exposureGoal = 1.1 - 0.3 * sunOn * THREE.MathUtils.clamp(sunR / 50, 0, 1);
 		exposure += (exposureGoal - exposure) * (k === 1 ? 1 : 1 - Math.exp(-dt * 1.2));
@@ -902,8 +928,9 @@ ${PLANET_FRAGMENT}`,
 	];
 	function report() {
 		opts.onFrame(
-			bodies.map((b) => toScreen(b.pivot.position, b.id, b.size)),
+			bodies.map((b) => toScreen(b.pivot.position, b.id, b.size * b.scale)),
 			labelPoints.map((l) => toScreen(l.p, l.key, 0)),
+			toScreen(SUN_AT, 'sun', 1.1),
 		);
 	}
 
@@ -945,14 +972,36 @@ ${PLANET_FRAGMENT}`,
 	start();
 
 	return {
-		focus(id: string) {
-			lockedId = id;
-			panGoal.set(0, 0, 0);
-			if (!raf) pan.set(0, 0, 0);
-			if (opts.reduced) still();
-		},
 		setPaused(p: boolean) {
 			paused = p;
+		},
+		// Fly to one body ('sun' for the star) and hold it at `frame`; an empty id returns to the overview
+		closeup(id: string, frame: CloseFrame) {
+			Object.assign(closeFrame, frame);
+			if (id === closeId) return;
+			closeId = id;
+			userZoomGoal = 1;
+			panGoal.set(0, 0, 0);
+			const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+			const b = bodies.find((x) => x.id === id);
+			let az = 0, el = 0.36;
+			if (b) {
+				// Look at the body from 70° off the line to the star: a gibbous phase, lit limb on the left, night side toward the text
+				const toSun = Math.atan2(-Math.sin(b.angle), -Math.cos(b.angle));
+				az = Math.PI / 2 - (toSun - THREE.MathUtils.degToRad(70));
+				el = b.ring ? 0.24 : 0.12;
+			} else if (id) {
+				az = userAz;
+				el = 0.22;
+			}
+			azGoal = userAz + wrap(az - userAz);
+			elGoal = id ? el - elev : 0;
+			steer = 3;
+			if (!raf) still();
+		},
+		setCloseFrame(frame: CloseFrame) {
+			Object.assign(closeFrame, frame);
+			if (!raf) still();
 		},
 	};
 }
