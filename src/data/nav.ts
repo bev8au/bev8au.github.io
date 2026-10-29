@@ -1,5 +1,5 @@
-// Where the mission-debrief console lives. Change this one value when the design moves to the site root.
-export const HOME = '/designs/debrief';
+// Where the mission-debrief console lives: the site's home page.
+export const HOME = '/';
 
 // Console tabs. Sections of the debrief page are hashes on HOME; the rest are their own routes.
 export const tabs = [
