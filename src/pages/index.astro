@@ -5,8 +5,10 @@ import { profile } from '../data/profile';
 import Portrait from '../components/Portrait.astro';
 import fieldPhoto from '../assets/portraits/field-photo.jpg';
 import { commandModule } from '../data/command-module';
+import { court } from '../data/court';
 
 const cabinPhotos = import.meta.glob<ImageMetadata>('../assets/cabin/*.jpg', { eager: true, import: 'default' });
+const courtPhotos = import.meta.glob<ImageMetadata>('../assets/court/*.jpg', { eager: true, import: 'default' });
 // Design D: Mission debrief. An unfamiliar star with four worlds, one per kind of experience: academic, professional,
 // engagement, and research. Picking a world flies the camera in; its sites are pinned to the surface, and picking
 // a site opens its debrief. A crewed vessel orbits out of the planets' plane: its command module holds my profile,
@@ -164,6 +166,14 @@ const cabinData = {
 	worlds: worlds.map((w) => ({ code: w.code, name: w.name, look: w.look, orbit: w.orbit })),
 	vesselOrbit: vessel.orbit,
 };
+// The basketball bay's arena boards (text in src/data/court.ts) and the banners in its rafters
+const courtData = {
+	panels: court.panels.map((p) => ({
+		...p,
+		photos: p.photos.map((ph) => ({ src: courtPhotos[`../assets/court/${ph.file}.jpg`].src, caption: ph.caption })),
+	})),
+	banners: court.banners,
+};
 const siteCount = worlds.reduce((n, w) => n + w.sites.length, 0);
 
 // Close-up views, one per hash: the vessel and each world (their sections or sites listed beside their pins),
@@ -184,10 +194,11 @@ const views = [
 	...vesselSections.map((s, si) => ({
 		key: s.id, host: vessel.id, pins: vesselSections.length, geo: null, pin: si, desig: s.id, name: s.name, kind: `${s.kind}. Aboard ${vessel.name}`,
 		status: 'home', statusText: s.statusText, points: s.points.map((p) => ({ ...p, go: '' })),
-		link: { href: '/cv/', label: 'View CV' } as { href: string; label: string } | null, enter: false,
+		link: { href: '/cv/', label: 'View CV' } as { href: string; label: string } | null, enter: '', enterLabel: '',
 		back: vessel.id, backLabel: `Back to ${vessel.name}`, ...around(vesselSections.map((x) => x.id), si),
 		// The command module only says whose profile it holds; the profile itself is inside
-		...(si === 0 && { name: profile.name, kind: `Personal profile, in the command module of ${vessel.name}`, points: [], link: null, enter: true }),
+		...(si === 0 && { name: profile.name, kind: `Personal profile, in the command module of ${vessel.name}`, points: [], link: null, enter: 'cabin', enterLabel: 'Enter the command module' }),
+		...(si === 1 && { kind: `${s.kind}. Aboard ${vessel.name}`, points: [], link: null, enter: 'court', enterLabel: 'Enter the court' }),
 	})),
 	...worlds.flatMap((w) => [
 		{
@@ -353,7 +364,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 									<p class="cu-kind"></p>
 									<p class="cu-hint"></p>
 									<a class="cu-link cta" href="/experience/"><span class="cta-gauge" aria-hidden="true"></span><span class="cu-link-text"></span></a>
-									<button class="cu-enter cta" type="button" hidden><span class="cta-gauge" aria-hidden="true"></span>Enter the command module</button>
+									<button class="cu-enter cta" type="button" hidden><span class="cta-gauge" aria-hidden="true"></span><span class="cu-enter-text"></span></button>
 								</header>
 								<ol class="cu-points"></ol>
 							</div>
@@ -473,12 +484,12 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			</footer>
 		</div>
 
-		<section class="cabin" hidden aria-label="Inside the command module">
+		<section class="cabin" hidden aria-label="Inside the vessel">
 			<div class="cabin-view"></div>
 			<span class="cabin-reticle" aria-hidden="true"></span>
 			<header class="cabin-bar">
 				<p><b>VSL-01</b> Command module, aboard ML-1</p>
-				<button class="cabin-leave" type="button">Leave the module <kbd>Esc</kbd></button>
+				<button class="cabin-leave" type="button">Back to the ship <kbd>Esc</kbd></button>
 			</header>
 			<button class="cabin-prompt" type="button"><span class="keys">Press <kbd>F</kbd> to open the hatch</span><span class="touch">Tap to open the hatch</span></button>
 			<button class="cabin-capture" type="button">Click to look around<span>Move the mouse to look, <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to walk, <kbd>Esc</kbd> to free the mouse</span></button>
@@ -494,10 +505,13 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 		<script type="application/json" id="body-data" set:html={JSON.stringify({ bodies, vessel: vesselSpec })} />
 		<script type="application/json" id="view-data" set:html={JSON.stringify({ views, names: viewName })} />
 		<script type="application/json" id="cabin-data" set:html={JSON.stringify(cabinData)} />
+		<script type="application/json" id="court-data" set:html={JSON.stringify(courtData)} />
 
 		<script>
 			import { createPlot, type BodySpec, type CloseFrame, type PlotOptions } from '../scripts/debrief-plot';
-			import { createCabin, type Cabin, type CabinContent } from '../scripts/cabin';
+			import { createInteriors, type Interiors } from '../scripts/interior';
+			import { commandModule, type CabinContent } from '../scripts/cabin';
+			import { courtBay, type CourtContent } from '../scripts/court';
 
 			const { bodies, vessel }: { bodies: BodySpec[]; vessel: PlotOptions['vessel'] } = JSON.parse(document.getElementById('body-data')!.textContent!);
 			const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -527,7 +541,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			type View = {
 				key: string; host: string; pins: number; geo: [number, number][] | null; pin: number; desig: string; name: string; kind: string; hint?: string;
 				status: string; statusText: string; points: { label: string; text: string; go: string }[];
-				link: { href: string; label: string } | null; enter: boolean; back: string; backLabel: string; prev: string; next: string;
+				link: { href: string; label: string } | null; enter: string; enterLabel: string; back: string; backLabel: string; prev: string; next: string;
 			};
 			const viewData: { views: View[]; names: Record<string, string> } = JSON.parse(document.getElementById('view-data')!.textContent!);
 			const views = new Map(viewData.views.map((v) => [v.key, v]));
@@ -539,18 +553,21 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			const SVG_NS = 'http://www.w3.org/2000/svg';
 			let cuView: View | null = null; // the view on screen, or on its way
 			let cuHost = ''; // the body the camera holds
-			let cuLabels: { x: number; y: number }[] = []; // each callout label's left middle, in plot px
+			let cuLabels: { x: number; r: number; y: number }[] = []; // each callout label's left and right edges and middle, in plot px
 			let cuOrder: number[] = []; // which pin each listed entry belongs to, top to bottom
 			let lastPins: { x: number; y: number; front: number }[] = [];
 			let readyTimer = 0;
 
-			// Wide screens hold the body left of center with the callouts beside it; narrow ones put it on top and stack the text below
+			// Wide screens hold the body left of center with the callouts beside it; narrow ones put it on top and stack the text below.
+			// The vessel sits in the right half instead, clear of the title, with its text on the left.
 			function cuFrame(): CloseFrame {
 				const w = plot.clientWidth, h = plot.clientHeight;
-				const narrow = w < 760 || w / h < 0.95;
-				const f = narrow ? { x: 0.5, y: 0.32, r: Math.min(w * 0.34, h * 0.17) } : { x: 0.29, y: 0.6, r: Math.min(h * 0.34, w * 0.21) };
+				const narrow = w < 760 || w / h < 0.95, ship = cu.classList.contains('vessel');
+				const f = narrow ? { x: 0.5, y: 0.32, r: Math.min(w * 0.34, h * 0.17) }
+					: ship ? { x: 0.67, y: 0.55, r: Math.min(h * 0.36, w * 0.22) }
+					: { x: 0.29, y: 0.6, r: Math.min(h * 0.34, w * 0.21) };
 				cu.classList.toggle('narrow', narrow);
-				cu.style.setProperty('--cu-col', `${Math.round(f.x * w + f.r + 96)}px`);
+				cu.style.setProperty('--cu-col', ship && !narrow ? '28px' : `${Math.round(f.x * w + f.r + 96)}px`);
 				cu.style.setProperty('--cu-top', `${Math.round(f.y * h + f.r + 28)}px`);
 				return f;
 			}
@@ -559,7 +576,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				const box = plot.getBoundingClientRect();
 				cuLabels = [...cuPoints.querySelectorAll('.cu-label')].map((l) => {
 					const r = l.getBoundingClientRect();
-					return { x: r.left - box.left, y: r.top + r.height / 2 - box.top };
+					return { x: r.left - box.left, r: r.right - box.left, y: r.top + r.height / 2 - box.top };
 				});
 			}
 
@@ -599,7 +616,10 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 					link.href = v.link.href;
 					link.querySelector('.cu-link-text')!.textContent = v.link.label;
 				}
-				cu.querySelector<HTMLButtonElement>('.cu-enter')!.hidden = !v.enter;
+				const enter = cu.querySelector<HTMLButtonElement>('.cu-enter')!;
+				enter.hidden = !v.enter;
+				enter.dataset.go = v.enter;
+				enter.querySelector('.cu-enter-text')!.textContent = v.enterLabel;
 				// A list of sites runs in the order its pins sit on screen, top to bottom, so no two leaders cross;
 				// each entry keeps its pin's number
 				cuOrder = v.points.map((_, i) => i);
@@ -684,8 +704,10 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 						ax = p.x + Math.cos(a) * p.r * 0.94;
 						ay = p.y + Math.sin(a) * p.r * 0.94;
 					}
-					const end = label.x - 12;
-					g.children[0].setAttribute('d', `M${ax},${ay} L${end - 40},${label.y} L${end},${label.y}`);
+					// A leader comes in from whichever side its pin is on, so it never crosses its own text
+					const fromRight = ax > label.r;
+					const end = fromRight ? label.r + 12 : label.x - 12, elbow = fromRight ? end + 40 : end - 40;
+					g.children[0].setAttribute('d', `M${ax},${ay} L${elbow},${label.y} L${end},${label.y}`);
 					for (const c of [g.children[1], g.children[2]]) {
 						c.setAttribute('cx', String(ax));
 						c.setAttribute('cy', String(ay));
@@ -880,33 +902,38 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				closeConsole();
 			}
 
-			// ---------- Inside the command module: its own first-person scene, built the first time it opens ----------
+			// ---------- Inside the vessel: walkable interiors, each its own first-person scene, built the first time it opens ----------
+			// Each hash names an interior and the section of the ship it is inside
+			const INTERIORS: Record<string, string> = { cabin: 'VSL-01', court: 'VSL-02' };
 			const cabinHost = document.querySelector<HTMLElement>('.cabin')!;
-			let cabin: Cabin | null = null;
-			const leaveCabin = () => goCloseup(views.get('VSL-01')!.back, true);
-			function openCabin() {
-				const content: CabinContent = { ...JSON.parse(document.getElementById('cabin-data')!.textContent!), textures: `${import.meta.env.BASE_URL.replace(/\/?$/, '/')}textures/` };
-				cabin ??= createCabin(cabinHost, content, { reduced, onExit: leaveCabin });
+			let interiors: Interiors | null = null;
+			const leaveInterior = () => goCloseup(views.get(INTERIORS[interiors?.current || 'cabin'])!.back, true);
+			function openInterior(id: string) {
+				const data = (name: string) => JSON.parse(document.getElementById(name)!.textContent!);
+				interiors ??= createInteriors(cabinHost, {
+					cabin: commandModule(data('cabin-data') as CabinContent),
+					court: courtBay(data('court-data') as CourtContent),
+				}, { reduced, textures: `${import.meta.env.BASE_URL.replace(/\/?$/, '/')}textures/`, onExit: leaveInterior });
 				closeConsole();
-				openCloseup('VSL-01'); // the ship waits outside, held on the module
-				cabin.open();
+				openCloseup(INTERIORS[id]); // the ship waits outside, held on that section
+				interiors.open(id);
 				scene.suspend(true);
 			}
-			function closeCabin() {
-				if (!cabin?.isOpen) return;
-				cabin.close();
+			function closeInterior() {
+				if (!interiors?.isOpen) return;
+				interiors.close();
 				scene.suspend(false);
 			}
-			cu.querySelector('.cu-enter')!.addEventListener('click', () => goCloseup('cabin'));
-			cabinHost.querySelector('.cabin-leave')!.addEventListener('click', leaveCabin);
+			cu.querySelector<HTMLButtonElement>('.cu-enter')!.addEventListener('click', (e) => goCloseup((e.currentTarget as HTMLButtonElement).dataset.go!));
+			cabinHost.querySelector('.cabin-leave')!.addEventListener('click', leaveInterior);
 
 			function route() {
 				const page = location.hash.slice(1);
-				if (page === 'cabin') {
-					openCabin();
+				if (page in INTERIORS) {
+					openInterior(page);
 					return;
 				}
-				closeCabin();
+				closeInterior();
 				if (isCloseup(page)) {
 					closeConsole();
 					openCloseup(page);
@@ -921,13 +948,13 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			plot.querySelector('.full-view')!.addEventListener('click', goFullView);
 			addEventListener('keydown', (e) => {
 				if (e.key !== 'Escape') return;
-				if (cabin?.isOpen) {
+				if (interiors?.isOpen) {
 					// The first Escape only frees the mouse; the next one leaves
-					if (performance.now() - cabin.lockReleasedAt > 300) leaveCabin();
+					if (performance.now() - interiors.lockReleasedAt > 300) leaveInterior();
 				} else if (cuView) goBack();
 				else if (!root.classList.contains('immersive')) goFullView();
 			});
-			if (location.hash === '#cabin') openCabin();
+			if (location.hash.slice(1) in INTERIORS) openInterior(location.hash.slice(1));
 			else if (isCloseup(location.hash.slice(1))) openCloseup(location.hash.slice(1));
 			// Let the first-visit boot finish, then drop its long delays so later openings use their own timing
 			if (root.classList.contains('boot')) setTimeout(() => root.classList.remove('boot'), 2800);
@@ -1465,10 +1492,12 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.closeup.narrow::before { background: linear-gradient(0deg, rgba(3, 5, 10, 0.9) 0%, rgba(3, 5, 10, 0.7) 55%, transparent 72%), linear-gradient(180deg, rgba(3, 5, 10, 0.6), transparent 22%); }
 			.closeup.narrow .cu-leaders { display: none; }
 			.closeup.vessel .cu-pin, .closeup.vessel .cu-reticle { display: none; }
+			.closeup.vessel:not(.narrow) .cu-title { max-width: min(560px, 38vw); }
+			.closeup.vessel:not(.narrow) .cu-points { top: 60%; max-width: min(460px, 36vw); }
 			/* Hull detail fills the frame aboard the vessel, so the text side gets a deeper scrim */
 			.closeup.vessel:not(.narrow)::before {
 				background:
-					linear-gradient(270deg, rgba(3, 5, 10, 0.94) 0%, rgba(3, 5, 10, 0.78) 30%, rgba(3, 5, 10, 0.3) 52%, transparent 64%),
+					linear-gradient(90deg, rgba(3, 5, 10, 0.9) 0%, rgba(3, 5, 10, 0.7) 26%, rgba(3, 5, 10, 0.25) 42%, transparent 52%),
 					linear-gradient(180deg, rgba(3, 5, 10, 0.7), transparent 30%),
 					linear-gradient(0deg, rgba(3, 5, 10, 0.55), transparent 16%);
 			}

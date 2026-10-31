@@ -303,10 +303,10 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 	const kicker = new THREE.DirectionalLight('#9fb4dc', 0.35);
 	kicker.position.set(0, 0.4, 1);
 	camera.add(kicker);
-	const sunLight = new THREE.PointLight('#ffe7cc', 3.2, 0, 0);
+	const sunLight = new THREE.PointLight('#fff1dc', 3.4, 0, 0);
 	scene.add(sunLight);
 	// In the vessel's close-up its sunlight comes from a directional light instead, which casts shadows
-	const shipSun = new THREE.DirectionalLight('#ffe7cc', 0);
+	const shipSun = new THREE.DirectionalLight('#fff1dc', 0);
 	shipSun.castShadow = true;
 	const shadowRes = container.clientWidth >= 700 ? 4096 : 1536;
 	shipSun.shadow.mapSize.set(shadowRes, shadowRes);
@@ -336,19 +336,18 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 					vec3 photo = texture2D(uMap, vUv + vec2(uTime * 0.002, 0.0)).rgb;
 					float n = fbm(vPos * 2.6 + vec3(0.0, uTime * 0.06, uTime * 0.03));
 					float g = fbm(vPos * 9.0 - vec3(uTime * 0.05));
-					// An unfamiliar star: a little cooler and dimmer than the Sun
-					vec3 col = mix(photo * vec3(1.0, 0.9, 0.74), vec3(1.0, 0.87, 0.68), 0.45 + smoothstep(0.45, 0.8, n) * 0.35);
+					vec3 col = mix(photo * vec3(1.0, 0.95, 0.85), vec3(1.0, 0.94, 0.82), 0.45 + smoothstep(0.45, 0.8, n) * 0.35);
 					col *= 0.8 + g * 0.5;
 					float limb = 0.4 + 0.6 * pow(max(dot(vN, vV), 0.0), 0.5);
-					gl_FragColor = vec4(col * limb * 1.5, 1.0);
+					gl_FragColor = vec4(col * limb * 2.4, 1.0);
 				}
 			`,
 		}),
 	);
 	scene.add(sun);
 
-	const coronaTex = radialTexture([[0, 'rgba(255,236,206,1)'], [0.12, 'rgba(255,184,104,0.7)'], [0.35, 'rgba(236,160,64,0.16)'], [1, 'rgba(236,160,64,0)']]);
-	for (const [scale, opacity] of [[4.2, 0.42], [11, 0.06]] as const) {
+	const coronaTex = radialTexture([[0, 'rgba(255,244,220,1)'], [0.12, 'rgba(255,196,110,0.75)'], [0.35, 'rgba(242,177,59,0.18)'], [1, 'rgba(242,177,59,0)']]);
+	for (const [scale, opacity] of [[5, 0.7], [13, 0.1]] as const) {
 		const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity }));
 		s.scale.setScalar(scale);
 		scene.add(s);
@@ -578,6 +577,7 @@ ${PLANET_FRAGMENT}`,
 	const vessel = vo && renderer ? buildVessel(vo.bays) : null;
 	// The orbit's plane: u runs along the line of nodes, v completes it, and n is its upward normal
 	const vu = new THREE.Vector3(), vv = new THREE.Vector3(), vn = new THREE.Vector3();
+	const VESSEL_SPEED = (Math.PI * 2) / 300; // radians a second
 	let vAngle = 0, vScale = 1, ringGoal = 0, shipLight = 0;
 	let vSection = -1; // in the vessel's close-up, the section the camera holds, or -1 for the whole ship
 	let shadowSpan = 0;
@@ -909,7 +909,8 @@ ${PLANET_FRAGMENT}`,
 			b.pivot.scale.setScalar(b.scale);
 		}
 		if (vessel && vo) {
-			if (!paused && !closeId) vAngle += (dt * 0.2) / Math.pow(vo.orbit, 1.5);
+			// Under power, the ship runs its orbit faster than a planet would: about once every five minutes
+			if (!paused && !closeId) vAngle += dt * VESSEL_SPEED;
 			const goal = closeId && closeId !== 'vessel' ? 0.3 : 1;
 			vScale += (goal - vScale) * (k === 1 ? 1 : 1 - Math.exp(-dt * 2.5));
 			placeVessel();
@@ -943,7 +944,7 @@ ${PLANET_FRAGMENT}`,
 		// Close in on the vessel and the star's light hands over to a shadow-casting directional light aimed at it
 		if (vessel) {
 			shipLight += ((closeId === 'vessel' ? 1 : 0) - shipLight) * (k === 1 ? 1 : 1 - Math.exp(-dt * 2));
-			sunLight.intensity = 3.2 * (1 - 0.85 * shipLight);
+			sunLight.intensity = 3.4 * (1 - 0.85 * shipLight);
 			shipSun.intensity = 3.4 * shipLight;
 			shipSun.shadow.autoUpdate = shipLight > 0.01;
 			// The shadow map covers only what the camera holds, so a single section gets crisp shadows
