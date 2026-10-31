@@ -4,73 +4,216 @@ import { tabs as navTabs } from '../data/nav';
 import { profile } from '../data/profile';
 import Portrait from '../components/Portrait.astro';
 import fieldPhoto from '../assets/portraits/field-photo.jpg';
-// Design D: Mission debrief. Projects orbit a home star on a tactical plot; orbit radius is the launch year.
-// Clicking a target flies the camera in for a full-screen close-up debrief. Motion language borrowed from 2Advanced V3.
-const sorties = [
+import { commandModule } from '../data/command-module';
+
+const cabinPhotos = import.meta.glob<ImageMetadata>('../assets/cabin/*.jpg', { eager: true, import: 'default' });
+// Design D: Mission debrief. An unfamiliar star with four worlds, one per kind of experience: academic, professional,
+// engagement, and research. Picking a world flies the camera in; its sites are pinned to the surface, and picking
+// a site opens its debrief. A crewed vessel orbits out of the planets' plane: its command module holds my profile,
+// and each habitat bay one of my interests. Motion language borrowed from 2Advanced V3.
+// Within a world, sites run newest first by their start date and take their designations in that order (PRO-01 is
+// the most recent), so a new site can go anywhere in its list.
+const worldData = [
 	{
-		id: 'MLU-07', name: 'Goldman Sachs GH', kind: 'Investment banking intern', year: 2026, phase: 0.6, status: 'complete', look: 'gas', size: 0.85,
-		objective: 'Evaluate two AI companies, in industrial IoT and AI agent infrastructure, for a sale process, and value a leading Chinese automaker.',
-		outcome: "Mapped M&A synergies with potential buyers across product, technology, data, and cost, and prepared pitchbook materials for buyer outreach. Built the automaker's valuation model with a Middle East expansion scenario and pitched a block trade to a regional PE firm ahead of a shareholder lockup expiry.",
-		focus: 'M&A, valuation, block trades', place: 'Beijing, China', dates: 'Jun 2026 to Aug 2026',
+		id: 'academic', code: 'ACA', name: 'Academic', look: 'saturn', size: 0.8, orbit: 13, phase: 2.6,
+		blurb: 'Consulting projects in the McIntire core, teaching finance, and my coursework.',
+		sites: [
+			{
+				name: 'ICE: Allianz and Uber', kind: 'Integrated Core Experience', status: 'complete',
+				objective: "Two client projects in McIntire's ICE courses: a new client service for Allianz and an proposed acquisition for Uber.",
+				outcome: 'Modeled a global travel repatriation service for Allianz at a 25.09% IRR and presented it to Allianz executives. Proposed Uber acquiring GoTo, with $1.9B in projected synergies and a half-cash, half-stock structure.',
+				focus: 'Financial modeling, M&A Synergy, Deal structure, Consulting, Market Research', place: 'UVA McIntire', dates: 'Sep 2025 to May 2026',
+			},
+			{
+				name: 'Teaching Assistant', kind: 'GCOM 7060 and COMM 2002', status: 'complete',
+				objective: 'Support students in two core finance courses at McIntire.',
+				outcome: 'Led office hours and review sessions for 300+ students on the time value of money, CAPM, portfolio theory, capital budgeting, and company valuation.',
+				focus: 'Teaching, Corporate finance, Financial management', place: 'UVA McIntire', dates: 'Sep 2025 to May 2026',
+			},
+			{
+				// A course list in place of the usual debrief; the courses mirror education.courses in src/data/experience.ts
+				name: 'Coursework', kind: 'BS Commerce, finance concentration, minor in computer science', status: 'flight',
+				place: 'UVA McIntire', dates: 'Aug 2023 to May 2027 (expected)',
+				points: [
+					{ label: 'Tracks', text: 'Quantitative Finance; Analytics and AI' },
+					{ label: 'Finance and accounting', text: 'Quantitative & Financial Analysis; Intermediate Corporate Finance; Intermediate Accounting' },
+					{ label: 'Computer science', text: 'Data Structures and Algorithms; Discrete Math and Theory' },
+					{ label: 'Statistics', text: 'Introduction to Regression Analysis' },
+				],
+			},
+		],
 	},
 	{
-		id: 'MLU-06', name: 'ICE: Allianz and Uber', kind: 'Consulting project', year: 2025, phase: 4.6, status: 'complete', look: 'moon', size: 0.38,
-		objective: "Two client projects in McIntire's Integrated Core Experience: a new service for Allianz and an acquisition for Uber.",
-		outcome: 'Modeled a global travel repatriation service for Allianz at a 25.09% IRR and presented it to Allianz executives. Proposed Uber acquiring GoTo, with $1.9B in projected synergies and a half-cash, half-stock structure.',
-		focus: 'Financial modeling, M&A', place: 'UVA McIntire', dates: 'Sep 2025 to May 2026',
+		id: 'professional', code: 'PRO', name: 'Professional', look: 'neptune', size: 0.72, orbit: 16, phase: 4.4,
+		blurb: 'Internships across investment banking, private equity, venture capital, equity research, and consulting.',
+		sites: [
+			{
+				name: 'Goldman Sachs GH Securities', kind: 'Investment banking intern', status: 'complete',
+				objective: 'Seek buyers for 2 companies in Industrial IoT and AI Agent Infra sectors, and value a leading Chinese automaker.',
+				outcome: "Mapped M&A synergies with potential buyers across product, technology, data, and cost, and prepared pitchbook materials for buyer outreach. Built the automaker's valuation model with a Middle East expansion scenario and pitched a block trade to a regional PE firm ahead of a shareholder lockup expiry.",
+				focus: 'Investment banking, M&A, Valuation', place: 'Beijing, China', dates: 'Jun 2026 to Aug 2026',
+			},
+			{
+				name: 'China Mobile Investment', kind: 'Corporate investment intern', status: 'complete',
+				objective: 'Find edge computing investments in the RISC-V ecosystem and help close a robotics deal.',
+				outcome: 'Wrote a 50-page RISC-V industry report, discovering investment opportunities driven by its highly flexible architecture design. Supported a $100M investment closing in a robotics manufacturer by participating in due diligence, unit economics discussion, and the valuation model.',
+				focus: 'Private equity, RISC-V, Robotics, Unit economics', place: 'Beijing, China', dates: 'May 2025 to Aug 2025',
+			},
+			{
+				name: 'Portola Growth Partners', kind: 'Private equity intern', status: 'complete',
+				objective: 'Source investments in pediatric behavioral health and home medical equipment sectors.',
+				outcome: 'Screened 100 startups and contacted five targets. Ran due diligence on Unicare Diagnostics, including EBITDA and margin analysis.',
+				focus: 'Private equity, Healthcare investment', place: 'New York', dates: 'Jan 2025 to May 2025',
+			},
+			{
+				name: 'StudentBrains Consulting', kind: 'Student consultant', status: 'complete',
+				objective: 'Find potential clients among Charlottesville businesses and help an art auction client grow its revenue.',
+				outcome: "Evaluated 50+ local businesses across websites, social media, and third-party platforms to support sales outreach. Broke down the auction client's revenue mix in Excel and Tableau to find its high-value customer segments, key markets, and best outreach channels.",
+				focus: 'Consulting, Market research, Revenue analysis', place: 'New York', dates: 'Jan 2025 to May 2025',
+			},
+			{
+				name: 'HUAXI Securities', kind: 'Equity research intern', status: 'complete',
+				objective: "Track data-center GPU design and cover a company in China's IoT sector.",
+				outcome: "Built a Python dataset of 30+ GPU architectures and used machine learning to forecast next-generation features, consistent with NVIDIA's later releases. Wrote a 40-page industry report and a 17-page due diligence report on a leading Chinese industrial controller company.",
+				focus: 'Equity research, Semiconductors, GPU, IoT', place: 'Beijing, China', dates: 'May 2024 to Aug 2024',
+			},
+			{
+				name: 'LXL Capital', kind: 'Venture capital intern', status: 'complete',
+				objective: 'Track technology startup financing worldwide and run due diligence on big-data startups.',
+				outcome: 'Produced 10 weekly market reports from Crunchbase financing data, estimating valuation ranges from funding-round multiples. Ran due diligence on seven big-data startups and prepared internal investment presentations.',
+				focus: 'Venture capital, due diligence, SaaS', place: 'New York', dates: 'Dec 2023 to Mar 2024',
+			},
+		],
 	},
 	{
-		id: 'MLU-05', name: 'China Mobile Investment', kind: 'Corporate investment intern', year: 2025, phase: 0.4, status: 'complete', look: 'ocean', size: 0.5,
-		objective: 'Find edge computing investments in the RISC-V ecosystem and help close a robotics deal.',
-		outcome: 'Wrote a 50-page RISC-V industry report. Supported a $100M investment closing in a robotics manufacturer: the initiation report, due diligence, unit economics, and the valuation model.',
-		focus: 'RISC-V, robotics, due diligence', place: 'Beijing, China', dates: 'May 2025 to Aug 2025',
+		id: 'engagement', code: 'ENG', name: 'Engagement', look: 'mars', size: 0.45, orbit: 7.4, phase: 1.4,
+		blurb: 'Sustainability work on grounds and the Chinese student community at UVA.',
+		sites: [
+			{
+				name: 'Aramark', kind: 'Sustainability intern', status: 'complete',
+				objective: 'Support data-driven waste reduction and sustainable dining on grounds.',
+				outcome: "Tracked food waste across three dining halls by location, time, and type. Assessed the financial feasibility of 10 campus sustainability projects and organized the monthly C'ville Market, with 2,000+ participants and 30+ local vendors from underserved communities.",
+				focus: 'Operation, Sustainability, Data analysis', place: 'Charlottesville, VA', dates: 'Sep 2024 to May 2025',
+			},
+			{
+				name: 'Mainland Student Network', kind: 'Director of publicity', status: 'complete',
+				objective: 'Run publicity for events serving Chinese international students at UVA.',
+				outcome: 'Helped organize 30+ events, designed 20+ posters, and managed social media. Secured $7,000+ in sponsorships and gave a one-hour solo piano recital at Old Cabell Hall for an audience of 300+.',
+				focus: 'Student government, Club outreach', place: 'Charlottesville, VA', dates: 'Sep 2023 to May 2024',
+			},
+		],
 	},
 	{
-		id: 'MLU-04', name: 'Portola Growth Partners', kind: 'Private equity intern', year: 2025, phase: 2.5, status: 'complete', look: 'ice', size: 0.5,
-		objective: 'Source investments in pediatric behavioral health and home medical equipment.',
-		outcome: 'Screened 100 startups and contacted five targets. Ran due diligence on Unicare Diagnostics, including EBITDA and margin analysis.',
-		focus: 'Healthcare services', place: 'New York (remote)', dates: 'Jan 2025 to May 2025',
+		id: 'research', code: 'RES', name: 'Research', look: 'eris', size: 0.56, orbit: 4.2, phase: 5.4,
+		blurb: 'Dark matter in Milky Way-like galaxies, with the UVA Department of Astronomy.',
+		sites: [
+			{
+				name: 'Dark Matter Density Profiles', kind: 'Research assistant, UVA Astronomy', status: 'complete',
+				objective: 'Model dark matter in Milky Way-like galaxies to estimate decay and annihilation signals.',
+				outcome: 'Processed 1,024 simulated galaxies from the DREAMS collaboration in Python and calculated their D- and J-factors, then used emulators to relate them to galaxy properties. Ninth author of a paper published in The Astrophysical Journal.',
+				focus: 'Astrophysics, Dark matter, D&J Factors, Computer Engineering', place: 'Charlottesville, VA', dates: 'May 2024 to Sep 2024',
+			},
+		],
 	},
-	{
-		id: 'MLU-03', name: 'Credit & Restructuring', kind: 'Club project lead', year: 2024, phase: 4.3, status: 'complete', look: 'moss', size: 0.36,
-		objective: 'Learn credit and restructuring analysis, and lead research on AI-enabled corporate financing.',
-		outcome: "Studied restructuring cases shared by KKR's restructuring team. Led a four-person study of machine learning in credit assessment, bond pricing, and private credit, including model risks like black-box behavior and data bias.",
-		focus: 'Credit, restructuring, AI in finance', place: 'UVA Credit & Restructuring Club', dates: 'Sep 2024 to May 2025',
-	},
-	{
-		id: 'MLU-02', name: 'HUAXI Securities', kind: 'Equity research intern', year: 2024, phase: 1.2, status: 'complete', look: 'rust', size: 0.45,
-		objective: "Track data-center GPU design and cover a company in China's IoT sector.",
-		outcome: "Built a Python dataset of 30+ GPU architectures and used machine learning to forecast next-generation features, consistent with NVIDIA's later releases. Wrote a 40-page industry report and a 17-page due diligence report on Wanma Technology.",
-		focus: 'Semiconductors, IoT', place: 'Beijing, China', dates: 'May 2024 to Aug 2024',
-	},
-	{
-		id: 'MLU-01', name: 'Chinese Basketball', kind: 'Team captain', year: 2023, phase: 2.2, status: 'flight', look: 'amber', size: 0.34,
-		objective: 'Run practices and tactics for the UVA Chinese Basketball Team.',
-		outcome: "Triangle League runner-up and NECBL Division Champion. Raised $4,000 in sponsorships for the team's operations.",
-		focus: 'Leadership', place: 'Charlottesville, VA', dates: 'Sep 2023 to present',
-	},
+];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const startOf = (dates: string) => {
+	const [, month, year] = dates.match(/(\w{3}) (\d{4})/)!;
+	return Number(year) * 12 + MONTHS.indexOf(month);
+};
+const worlds = worldData.map((w) => ({
+	...w,
+	sites: [...w.sites]
+		.sort((a, z) => startOf(z.dates) - startOf(a.dates))
+		.map((s, i) => ({ ...s, id: `${w.code}-${String(i + 1).padStart(2, '0')}` })),
+}));
+
+// The vessel. Its command module comes first, then one habitat bay per interest; stencil and feature dress the bay's pod.
+// The interest text is placeholder until it is written.
+const vessel = {
+	id: 'vessel', code: 'VSL', name: 'ML-1', blurb: 'Survey vessel. The command module carries my profile; each habitat bay, something I love doing.',
+	orbit: 10.4, inclination: 0.3, node: 0.9, phase: 0.5,
+	command: { name: 'Command Module', kind: 'Pilot dossier', points: profile.about.map((p) => ({ label: p.label, text: p.text })) },
+	bays: [
+		{ name: 'Basketball', room: 'The Court', stencil: 'COURT', feature: 'court' },
+		{ name: 'Astronomy', room: 'The Observatory', stencil: 'OBSERVATORY', feature: 'observatory' },
+		{ name: 'Piano', room: 'The Music Room', stencil: 'MUSIC ROOM', feature: 'music' },
+		{ name: 'Travel', room: 'The Map Room', stencil: 'MAP ROOM', feature: 'map' },
+		{ name: 'Video Games', room: 'The Arcade', stencil: 'ARCADE', feature: 'arcade' },
+	].map((b) => ({
+		...b,
+		points: [
+			{ label: 'About', text: `Placeholder: what ${b.name.toLowerCase()} means to me, and how I got into it.` },
+			{ label: 'Highlights', text: 'Placeholder: a few moments, achievements, or favourites worth sharing.' },
+			{ label: 'Now', text: 'Placeholder: how it fits into my life today.' },
+		],
+	})),
+};
+const vesselSections = [
+	{ id: 'VSL-01', name: vessel.command.name, kind: vessel.command.kind, statusText: 'Command', points: vessel.command.points },
+	...vessel.bays.map((b, i) => ({ id: `VSL-0${i + 2}`, name: b.name, kind: `${b.room}, habitat bay ${i + 1}`, statusText: `Bay ${i + 1}`, points: b.points })),
 ];
 const statusText = { flight: 'In flight', complete: 'Complete' };
-
-// Close-ups: picking a body flies the camera to it, and these callouts point at it.
-// The home star comes first, then the sorties in launch order, which is also the order Prev and Next step through.
-const closeups = [
-	{
-		id: 'sun', desig: 'SOL', name: profile.name, kind: 'Home star. BS Commerce, class of 2027', status: 'home', statusText: 'Pilot dossier',
-		points: profile.about.map((p) => ({ label: p.label, text: p.text })),
-		link: { href: '/cv/', label: 'View CV' },
-	},
-	...[...sorties].reverse().map((s) => ({
-		id: s.id, desig: s.id, name: s.name, kind: `${s.kind}, launched ${s.year}`, status: s.status, statusText: statusText[s.status],
-		points: [
-			{ label: 'Objective', text: s.objective },
-			{ label: 'Outcome', text: s.outcome },
-			{ label: 'Focus', text: s.focus },
-			{ label: 'Where and when', text: `${s.place}. ${s.dates}` },
-		],
-		link: { href: '/experience/', label: 'See the full record' },
+// The command module's wall displays (text in src/data/command-module.ts) and what its navigation display plots
+const cabinData = {
+	name: profile.name,
+	panels: commandModule.map((p) => ({
+		...p,
+		photos: p.photos.map((ph) => ({ src: cabinPhotos[`../assets/cabin/${ph.file}.jpg`].src, caption: ph.caption })),
 	})),
+	worlds: worlds.map((w) => ({ code: w.code, name: w.name, look: w.look, orbit: w.orbit })),
+	vesselOrbit: vessel.orbit,
+};
+const siteCount = worlds.reduce((n, w) => n + w.sites.length, 0);
+
+// Close-up views, one per hash: the vessel and each world (their sections or sites listed beside their pins),
+// and each section or site. A world's sites, or the vessel's sections, step through one another.
+const fullRecord = { href: '/experience/', label: 'See the full record' };
+// The vessel and the worlds step through one another, the worlds from the star outward
+const top = [vessel.id, ...[...worlds].sort((a, z) => a.orbit - z.orbit).map((w) => w.id)];
+const around = (list: string[], i: number) => ({ prev: list[(i - 1 + list.length) % list.length], next: list[(i + 1) % list.length] });
+const geo = (w: (typeof worlds)[number]) => (w.sites.every((s) => 'at' in s) ? w.sites.map((s) => (s as { at: number[] }).at) : null);
+const views = [
+	{
+		key: vessel.id, host: vessel.id, pins: vesselSections.length, geo: null, pin: -1, desig: vessel.code, name: vessel.name, kind: vessel.blurb,
+		hint: 'Point at a part of the ship to see what it is. Click to go aboard.',
+		status: 'home', statusText: `${vesselSections.length} sections`,
+		points: [],
+		link: { href: '/cv/', label: 'View CV' }, back: '', backLabel: 'Back to system', ...around(top, 0),
+	},
+	...vesselSections.map((s, si) => ({
+		key: s.id, host: vessel.id, pins: vesselSections.length, geo: null, pin: si, desig: s.id, name: s.name, kind: `${s.kind}. Aboard ${vessel.name}`,
+		status: 'home', statusText: s.statusText, points: s.points.map((p) => ({ ...p, go: '' })),
+		link: { href: '/cv/', label: 'View CV' } as { href: string; label: string } | null, enter: false,
+		back: vessel.id, backLabel: `Back to ${vessel.name}`, ...around(vesselSections.map((x) => x.id), si),
+		// The command module only says whose profile it holds; the profile itself is inside
+		...(si === 0 && { name: profile.name, kind: `Personal profile, in the command module of ${vessel.name}`, points: [], link: null, enter: true }),
+	})),
+	...worlds.flatMap((w) => [
+		{
+			key: w.id, host: w.id, pins: w.sites.length, geo: geo(w), pin: -1, desig: w.code, name: w.name, kind: w.blurb,
+			status: 'home', statusText: `${w.sites.length} ${w.sites.length === 1 ? 'site' : 'sites'}`,
+			points: w.sites.map((s) => ({ label: s.name, text: `${s.kind}. ${s.dates}`, go: s.id })),
+			link: fullRecord, back: '', backLabel: 'Back to system', ...around(top, top.indexOf(w.id)),
+		},
+		...w.sites.map((s, si) => ({
+			key: s.id, host: w.id, pins: w.sites.length, geo: geo(w), pin: si, desig: s.id, name: s.name, kind: `${s.kind}. ${w.name} world`,
+			status: s.status, statusText: statusText[s.status as keyof typeof statusText],
+			points: 'points' in s && s.points
+				? [...s.points.map((p) => ({ ...p, go: '' })), { label: 'Where and when', text: `${s.place}. ${s.dates}`, go: '' }]
+				: [
+					{ label: 'Objective', text: s.objective, go: '' },
+					{ label: 'Outcome', text: s.outcome, go: '' },
+					{ label: 'Focus', text: s.focus, go: '' },
+					{ label: 'Where and when', text: `${s.place}. ${s.dates}`, go: '' },
+				],
+			link: fullRecord, back: w.id, backLabel: `Back to ${w.name}`, ...around(w.sites.map((x) => x.id), si),
+		})),
+	]),
 ];
+const viewName = Object.fromEntries(views.map((v) => [v.key, `${v.desig} ${v.name}`]));
+const bodies = worlds.map(({ id, orbit, phase, look, size }) => ({ id, orbit, phase, look, size }));
+const vesselSpec = { orbit: vessel.orbit, inclination: vessel.inclination, node: vessel.node, phase: vessel.phase, bays: vessel.bays.map(({ stencil, feature }) => ({ stencil, feature })) };
 
 // Milestones from the résumé; the Experience page has the full record
 const log = [
@@ -164,38 +307,33 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 								{tabs.map((t) => <a href={t.href}>{t.label}</a>)}
 							</nav>
 						</header>
-						<p class="immersive-hint" aria-hidden="true">Drag to look around, scroll to zoom. Pick a planet, or the sun, to fly in for its debrief.</p>
+						<p class="immersive-hint" aria-hidden="true">Drag to look around, scroll to zoom. Pick a world to see its sites, or the vessel for my profile.</p>
 						<button class="full-view" type="button" aria-label="Return to the full-screen view">
 							<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4" /></svg>
 							Full view
 						</button>
 						<div class="marks" aria-hidden="true">
-							{['2023', '2024', '2025', '2026'].map((y) => <span class="yr" data-key={y}>'{y.slice(2)}</span>)}
-							<span class="yr belt" data-key="belt">Coursework belt</span>
+							<span class="yr belt" data-key="belt">Asteroid belt</span>
 						</div>
 						<div class="hud tl" aria-hidden="true">
 							<p class="hud-title">Tactical plot</p>
-							<p>Orbit radius marks launch year</p>
-						</div>
-						<div class="hud bl" aria-hidden="true">
-							<p><span class="key complete"></span>Complete</p>
-							<p><span class="key flight"></span>In flight</p>
+							<p>One world per résumé section</p>
 						</div>
 						<div class="hud br" aria-hidden="true">
-							<p>Tracking {sorties.length} objects</p>
+							<p>Tracking {worlds.length} worlds, {siteCount} sites, 1 vessel</p>
 						</div>
 						<ul class="targets" aria-label="Sorties on the plot">
 							<li>
-								<button class="target home" type="button" data-id="sun" aria-label="Martin Liu, the home star. Open the pilot dossier">
+								<button class="target vessel" type="button" data-id={vessel.id} aria-label={`${vessel.name}, my vessel. Fly in for my profile`}>
 									<span class="marker"></span>
-									<span class="tag"><i class="glyph"></i><b>SOL</b> Martin Liu, pilot dossier</span>
+									<span class="tag"><i class="glyph"></i><b>{vessel.code}</b> {vessel.name}, Martin Liu</span>
 								</button>
 							</li>
-							{sorties.map((s) => (
+							{worlds.map((w) => (
 								<li>
-									<button class:list={['target', s.status]} type="button" data-id={s.id} aria-label={`${s.id}, ${s.name}. Fly in for its debrief`}>
+									<button class="target" type="button" data-id={w.id} aria-label={`${w.name} world, ${w.sites.length} sites. Fly in`}>
 										<span class="marker"></span>
-										<span class="tag"><i class="glyph"></i><b>{s.id}</b> {s.name}</span>
+										<span class="tag"><i class="glyph"></i><b>{w.code}</b> {w.name}</span>
 									</button>
 								</li>
 							))}
@@ -206,12 +344,16 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 								<circle class="cu-reticle fine" r="0" />
 								<g class="cu-leaders"></g>
 							</svg>
+							<div class="cu-pins" data-nodrag></div>
+							<p class="cu-tip" aria-hidden="true"></p>
 							<div class="cu-sheet" data-nodrag>
 								<header class="cu-title" aria-live="polite">
 									<p class="cu-head"><span class="cu-desig"></span><span class="cu-status"></span></p>
 									<h2 class="cu-name"></h2>
 									<p class="cu-kind"></p>
+									<p class="cu-hint"></p>
 									<a class="cu-link cta" href="/experience/"><span class="cta-gauge" aria-hidden="true"></span><span class="cu-link-text"></span></a>
+									<button class="cu-enter cta" type="button" hidden><span class="cta-gauge" aria-hidden="true"></span>Enter the command module</button>
 								</header>
 								<ol class="cu-points"></ol>
 							</div>
@@ -270,20 +412,20 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				<section id="sorties" class="panel register" aria-labelledby="reg-title" data-boot style="--i:7">
 					<h2 class="panel-bar" id="reg-title"><span class="badge">S</span>Sortie register</h2>
 					<div class="reg-head" aria-hidden="true">
-						<span>Designation</span><span>Sortie</span><span>Class</span><span>Launched</span><span>Status</span>
+						<span>Designation</span><span>Sortie</span><span>Class</span><span>World</span><span>Status</span>
 					</div>
 					<ul class="reg">
-						{sorties.map((s) => (
+						{worlds.flatMap((w) => w.sites.map((s) => (
 							<li>
 								<button type="button" class="reg-row" data-id={s.id}>
 									<span class="r-id">{s.id}</span>
 									<span class="r-name">{s.name}</span>
 									<span class="r-kind">{s.kind}</span>
-									<span class="r-year">{s.year}</span>
-									<span class:list={['r-status', s.status]}>{statusText[s.status]}</span>
+									<span class="r-year">{w.name}</span>
+									<span class:list={['r-status', s.status]}>{statusText[s.status as keyof typeof statusText]}</span>
 								</button>
 							</li>
-						))}
+						)))}
 					</ul>
 				</section>
 
@@ -327,29 +469,44 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			<footer class="foot" data-boot style="--i:9">
 				<p>© 2026 Martin Liu</p>
 				<p>Built with Astro <span class="sep">//</span> Hosted on GitHub Pages</p>
-				<p class="credit">Planet and sky textures by <a href="https://www.solarsystemscope.com/textures/">Solar System Scope</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Planet surfaces recolored.</p>
+				<p class="credit">Planet and sky textures by <a href="https://www.solarsystemscope.com/textures/">Solar System Scope</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
 			</footer>
 		</div>
 
-		<script type="application/json" id="sortie-data" set:html={JSON.stringify(sorties.map((s) => ({ ...s, statusText: statusText[s.status] })))} />
-		<script type="application/json" id="closeup-data" set:html={JSON.stringify(closeups)} />
+		<section class="cabin" hidden aria-label="Inside the command module">
+			<div class="cabin-view"></div>
+			<span class="cabin-reticle" aria-hidden="true"></span>
+			<header class="cabin-bar">
+				<p><b>VSL-01</b> Command module, aboard ML-1</p>
+				<button class="cabin-leave" type="button">Leave the module <kbd>Esc</kbd></button>
+			</header>
+			<button class="cabin-prompt" type="button"><span class="keys">Press <kbd>F</kbd> to open the hatch</span><span class="touch">Tap to open the hatch</span></button>
+			<button class="cabin-capture" type="button">Click to look around<span>Move the mouse to look, <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to walk, <kbd>Esc</kbd> to free the mouse</span></button>
+			<p class="cabin-help"><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to walk</span><span class="touch">Use the pad to walk</span><span class="keys">, the mouse to look, <kbd>Esc</kbd> to free the mouse</span><span class="touch">, drag to look around</span>. Press <kbd>F</kbd> at the hatch to return to the ship.</p>
+			<div class="cabin-pad" aria-hidden="true">
+				<button type="button" data-key="f" style="grid-area: f">▲</button>
+				<button type="button" data-key="l" style="grid-area: l">◀</button>
+				<button type="button" data-key="b" style="grid-area: b">▼</button>
+				<button type="button" data-key="r" style="grid-area: r">▶</button>
+			</div>
+		</section>
+
+		<script type="application/json" id="body-data" set:html={JSON.stringify({ bodies, vessel: vesselSpec })} />
+		<script type="application/json" id="view-data" set:html={JSON.stringify({ views, names: viewName })} />
+		<script type="application/json" id="cabin-data" set:html={JSON.stringify(cabinData)} />
 
 		<script>
-			import { createPlot, type CloseFrame, type Look } from '../scripts/debrief-plot';
+			import { createPlot, type BodySpec, type CloseFrame, type PlotOptions } from '../scripts/debrief-plot';
+			import { createCabin, type Cabin, type CabinContent } from '../scripts/cabin';
 
-			type Sortie = {
-				id: string; name: string; kind: string; year: number; phase: number; status: string; statusText: string;
-				look: Look; size: number; objective: string; outcome: string; focus: string; place: string; dates: string;
-			};
-			const sorties: Sortie[] = JSON.parse(document.getElementById('sortie-data')!.textContent!);
+			const { bodies, vessel }: { bodies: BodySpec[]; vessel: PlotOptions['vessel'] } = JSON.parse(document.getElementById('body-data')!.textContent!);
 			const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 			// ---------- Tactical plot: three.js scene, HTML targets track it ----------
 			const plot = document.querySelector<HTMLElement>('.plot')!;
 			const targetsLayer = plot.querySelector<HTMLElement>('.targets')!;
 			const buttons = new Map<string, HTMLButtonElement>();
-			targetsLayer.querySelectorAll<HTMLButtonElement>('.target:not(.home)').forEach((b) => buttons.set(b.dataset.id!, b));
-			const sunBtn = targetsLayer.querySelector<HTMLButtonElement>('.target.home')!;
+			targetsLayer.querySelectorAll<HTMLButtonElement>('.target').forEach((b) => buttons.set(b.dataset.id!, b));
 			const marks = new Map<string, HTMLElement>();
 			plot.querySelectorAll<HTMLElement>('.yr').forEach((m) => marks.set(m.dataset.key!, m));
 
@@ -364,20 +521,27 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			addEventListener('resize', measureTags);
 			let hoveredId = '';
 
-			// ---------- Close-up: the camera flies to one body, and callouts point at it from its night side ----------
-			// Declared before the plot because the plot draws its first frame as soon as it is created
-			type Closeup = {
-				id: string; desig: string; name: string; kind: string; status: string; statusText: string;
-				points: { label: string; text: string }[]; link: { href: string; label: string };
+			// ---------- Close-up: the camera flies to one body; callouts point at it, or at the sites pinned to it ----------
+			// Declared before the plot because the plot draws its first frame as soon as it is created.
+			// A view is the star, a world (its sites listed beside their pins), or one site (its debrief, all leaders from its pin).
+			type View = {
+				key: string; host: string; pins: number; geo: [number, number][] | null; pin: number; desig: string; name: string; kind: string; hint?: string;
+				status: string; statusText: string; points: { label: string; text: string; go: string }[];
+				link: { href: string; label: string } | null; enter: boolean; back: string; backLabel: string; prev: string; next: string;
 			};
-			const closeups: Closeup[] = JSON.parse(document.getElementById('closeup-data')!.textContent!);
+			const viewData: { views: View[]; names: Record<string, string> } = JSON.parse(document.getElementById('view-data')!.textContent!);
+			const views = new Map(viewData.views.map((v) => [v.key, v]));
 			const cu = plot.querySelector<HTMLElement>('.closeup')!;
 			const cuLeaders = cu.querySelector<SVGGElement>('.cu-leaders')!;
 			const cuRings = [...cu.querySelectorAll<SVGCircleElement>('.cu-reticle')];
 			const cuPoints = cu.querySelector<HTMLOListElement>('.cu-points')!;
+			const cuPins = cu.querySelector<HTMLElement>('.cu-pins')!;
 			const SVG_NS = 'http://www.w3.org/2000/svg';
-			let cuId = '';
+			let cuView: View | null = null; // the view on screen, or on its way
+			let cuHost = ''; // the body the camera holds
 			let cuLabels: { x: number; y: number }[] = []; // each callout label's left middle, in plot px
+			let cuOrder: number[] = []; // which pin each listed entry belongs to, top to bottom
+			let lastPins: { x: number; y: number; front: number }[] = [];
 			let readyTimer = 0;
 
 			// Wide screens hold the body left of center with the callouts beside it; narrow ones put it on top and stack the text below
@@ -399,32 +563,72 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				});
 			}
 
-			function fillCloseup(c: Closeup) {
-				cu.querySelector('.cu-desig')!.textContent = c.desig;
+			// One numbered pin per site of the held world; picking a pin opens that site
+			function buildPins(v: View) {
+				cuPins.replaceChildren(...Array.from({ length: v.pins }, (_, i) => {
+					const b = document.createElement('button');
+					b.type = 'button';
+					b.className = 'cu-pin';
+					b.textContent = String(i + 1);
+					const site = viewData.views.find((x) => x.host === v.host && x.pin === i)!;
+					b.dataset.go = site.key;
+					b.setAttribute('aria-label', `${site.desig} ${site.name}`);
+					b.addEventListener('click', () => goCloseup(site.key, cuView?.pin !== -1));
+					return b;
+				}));
+			}
+
+			function markPins(v: View) {
+				[...cuPins.children].forEach((b, i) => {
+					b.classList.toggle('on', i === v.pin);
+					b.classList.toggle('dim', v.pin >= 0 && i !== v.pin);
+				});
+			}
+
+			function fillCloseup(v: View) {
+				cu.querySelector('.cu-desig')!.textContent = v.desig;
 				const status = cu.querySelector('.cu-status')!;
-				status.textContent = c.statusText;
-				status.className = `cu-status ${c.status}`;
-				cu.querySelector('.cu-name')!.textContent = c.name;
-				cu.querySelector('.cu-kind')!.textContent = c.kind;
+				status.textContent = v.statusText;
+				status.className = `cu-status ${v.status}`;
+				cu.querySelector('.cu-name')!.textContent = v.name;
+				cu.querySelector('.cu-kind')!.textContent = v.kind;
+				cu.querySelector('.cu-hint')!.textContent = v.hint ?? '';
 				const link = cu.querySelector<HTMLAnchorElement>('.cu-link')!;
-				link.href = c.link.href;
-				link.querySelector('.cu-link-text')!.textContent = c.link.label;
-				cuPoints.replaceChildren(...c.points.map((p, i) => {
+				link.hidden = !v.link;
+				if (v.link) {
+					link.href = v.link.href;
+					link.querySelector('.cu-link-text')!.textContent = v.link.label;
+				}
+				cu.querySelector<HTMLButtonElement>('.cu-enter')!.hidden = !v.enter;
+				// A list of sites runs in the order its pins sit on screen, top to bottom, so no two leaders cross;
+				// each entry keeps its pin's number
+				cuOrder = v.points.map((_, i) => i);
+				if (v.pin < 0 && v.pins && lastPins.length === v.pins) cuOrder.sort((a, z) => lastPins[a].y - lastPins[z].y);
+				cuPoints.replaceChildren(...cuOrder.map((pi, i) => {
+					const p = v.points[pi];
 					const li = document.createElement('li');
 					li.className = 'cu-point';
 					li.style.setProperty('--i', String(i));
 					const label = document.createElement('p');
 					label.className = 'cu-label';
 					const num = document.createElement('b');
-					num.textContent = String(i + 1).padStart(2, '0');
+					num.textContent = String(pi + 1).padStart(2, '0');
 					label.append(num, p.label);
 					const text = document.createElement('p');
 					text.className = 'cu-text';
 					text.textContent = p.text;
-					li.append(label, text);
+					if (p.go) {
+						// A world lists its sites: each entry is a button to that site
+						const go = document.createElement('button');
+						go.type = 'button';
+						go.className = 'cu-go';
+						go.append(label, text);
+						go.addEventListener('click', () => goCloseup(p.go));
+						li.append(go);
+					} else li.append(label, text);
 					return li;
 				}));
-				cuLeaders.replaceChildren(...c.points.map((_, i) => {
+				cuLeaders.replaceChildren(...v.points.map((_, i) => {
 					const g = document.createElementNS(SVG_NS, 'g');
 					g.style.setProperty('--i', String(i));
 					const path = document.createElementNS(SVG_NS, 'path');
@@ -438,30 +642,48 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 					g.append(path, halo, dot);
 					return g;
 				}));
-				const at = closeups.indexOf(c);
 				cu.querySelectorAll<HTMLButtonElement>('.cu-step').forEach((b) => {
-					const step = Number(b.dataset.step);
-					const t = closeups[(at + step + closeups.length) % closeups.length];
-					b.dataset.id = t.id;
-					b.querySelector('.cu-step-name')!.textContent = `${t.desig} ${t.name}`;
-					b.setAttribute('aria-label', `${step < 0 ? 'Previous' : 'Next'}: ${t.name}`);
+					const to = Number(b.dataset.step) < 0 ? v.prev : v.next;
+					b.dataset.id = to;
+					b.querySelector('.cu-step-name')!.textContent = viewData.names[to];
+					b.setAttribute('aria-label', `${Number(b.dataset.step) < 0 ? 'Previous' : 'Next'}: ${viewData.names[to]}`);
 				});
+				const back = cu.querySelector<HTMLButtonElement>('.cu-back')!;
+				back.firstChild!.textContent = `${v.backLabel} `;
+				markPins(v);
 				measureCloseup();
 			}
 
-			// Every frame: a reticle rings the body, and a leader runs from a point on its disc to each callout
-			function drawCloseup(p: { x: number; y: number; r: number }) {
+			// Every frame: a reticle rings the body, and a leader runs to each callout from its site's pin,
+			// from the chosen site's pin, or (for the star) from a point on its disc
+			function drawCloseup(p: { x: number; y: number; r: number }, pins: { x: number; y: number; front: number }[]) {
 				cuRings.forEach((c, i) => {
 					c.setAttribute('cx', String(p.x));
 					c.setAttribute('cy', String(p.y));
 					c.setAttribute('r', String(p.r * (i ? 1.15 : 1.07)));
 				});
+				[...cuPins.children].forEach((b, i) => {
+					const pin = pins[i];
+					const el = b as HTMLElement;
+					if (!pin) return;
+					// The translate property, not transform, so the pin's own scale stays centered on its spot
+					el.style.translate = `${pin.x}px ${pin.y}px`;
+					el.classList.toggle('behind', pin.front < 0.08);
+				});
+				const v = cuView;
+				if (!v) return;
 				const n = cuLabels.length;
 				[...cuLeaders.children].forEach((g, i) => {
 					const label = cuLabels[i];
 					if (!label) return;
-					const a = ((-48 + (96 * i) / Math.max(n - 1, 1)) * Math.PI) / 180;
-					const ax = p.x + Math.cos(a) * p.r * 0.94, ay = p.y + Math.sin(a) * p.r * 0.94;
+					let ax: number, ay: number;
+					const pin = v.pin >= 0 ? pins[v.pin] : v.pins ? pins[cuOrder[i]] : null;
+					if (pin) { ax = pin.x; ay = pin.y; }
+					else {
+						const a = ((-48 + (96 * i) / Math.max(n - 1, 1)) * Math.PI) / 180;
+						ax = p.x + Math.cos(a) * p.r * 0.94;
+						ay = p.y + Math.sin(a) * p.r * 0.94;
+					}
 					const end = label.x - 12;
 					g.children[0].setAttribute('d', `M${ax},${ay} L${end - 40},${label.y} L${end},${label.y}`);
 					for (const c of [g.children[1], g.children[2]]) {
@@ -471,53 +693,110 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				});
 			}
 
-			function openCloseup(id: string) {
-				const c = closeups.find((x) => x.id === id);
-				if (!c || id === cuId) return;
-				const switching = !!cuId;
-				cuId = id;
+			function openCloseup(key: string) {
+				const v = views.get(key);
+				if (!v || v === cuView) return;
+				const was = cuView;
+				cuView = v;
 				hoveredId = '';
 				plot.classList.add('cu-on');
+				cu.classList.toggle('vessel', v.host === 'vessel');
+				shipHover = -1;
+				tip.classList.remove('on');
+				scene.highlightVessel(-1, v.host === 'vessel' ? v.pin : -1);
 				cu.inert = false;
 				cu.classList.remove('ready');
-				scene.closeup(id, cuFrame());
-				// The text waits for the camera to arrive
 				clearTimeout(readyTimer);
-				const show = () => { fillCloseup(c); cu.classList.add('ready'); };
-				if (reduced) show();
-				else readyTimer = window.setTimeout(show, switching ? 1100 : 1300);
+				const show = () => { fillCloseup(v); cu.classList.add('ready'); };
+				if (v.host !== cuHost) {
+					// A new body: fly there first, then the text arrives
+					cuHost = v.host;
+					scene.closeup(v.host, cuFrame(), v.geo ?? v.pins, v.pin);
+					buildPins(v);
+					if (reduced) show();
+					else readyTimer = window.setTimeout(show, was ? 1100 : 1300);
+				} else if (v.host === 'vessel') {
+					// Aboard the vessel the camera moves between the whole ship and one section
+					scene.closeup(v.host, cuFrame(), v.pins, v.pin);
+					markPins(v);
+					if (reduced) show();
+					else readyTimer = window.setTimeout(show, 1000);
+				} else {
+					// Same body, another level: the camera holds and only the text swaps
+					markPins(v);
+					if (reduced) show();
+					else readyTimer = window.setTimeout(show, 260);
+				}
 			}
 
 			function closeCloseup() {
-				if (!cuId) return;
-				cuId = '';
+				if (!cuView) return;
+				cuView = null;
+				cuHost = '';
 				clearTimeout(readyTimer);
 				cu.classList.remove('ready');
 				plot.classList.remove('cu-on');
 				cu.inert = true;
+				cuPins.replaceChildren();
+				cu.classList.remove('vessel');
+				shipHover = -1;
+				tip.classList.remove('on');
+				plot.classList.remove('ship-hover');
+				scene.highlightVessel(-1, -1);
 				scene.closeup('', cuFrame());
 			}
 
-			const scene = createPlot(plot, sorties, {
+			// ---------- Aboard the vessel: point at a section to name it, click to open it ----------
+			const tip = cu.querySelector<HTMLElement>('.cu-tip')!;
+			let shipHover = -1;
+			const sectionKey = (i: number) => viewData.views.find((x) => x.host === 'vessel' && x.pin === i)?.key ?? '';
+			function hoverShip(i: number) {
+				if (i === shipHover) return;
+				shipHover = i;
+				plot.classList.toggle('ship-hover', i >= 0);
+				scene.highlightVessel(i, cuView?.host === 'vessel' ? cuView.pin : -1);
+				if (i < 0) { tip.classList.remove('on'); return; }
+				const v = views.get(sectionKey(i))!;
+				tip.replaceChildren(Object.assign(document.createElement('b'), { textContent: v.desig }), ` ${v.name}`);
+				tip.classList.add('on');
+			}
+			let downAt: [number, number] | null = null;
+			plot.addEventListener('pointermove', (e) => {
+				if (cuHost !== 'vessel' || plot.classList.contains('dragging') || e.pointerType === 'touch') return;
+				if ((e.target as Element).closest('button, a, [data-nodrag]')) { hoverShip(-1); return; }
+				hoverShip(scene.pickVessel(e.clientX, e.clientY));
+			});
+			plot.addEventListener('pointerleave', () => hoverShip(-1));
+			plot.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
+			plot.addEventListener('click', (e) => {
+				if (cuHost !== 'vessel' || !cuView || (e.target as Element).closest('button, a, [data-nodrag]')) return;
+				if (downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return; // that was a drag
+				const i = scene.pickVessel(e.clientX, e.clientY);
+				if (i < 0 || i === cuView.pin) return;
+				hoverShip(-1);
+				goCloseup(sectionKey(i), cuView.pin >= 0);
+			});
+
+			const scene = createPlot(plot, bodies, {
 				reduced,
+				vessel,
 				zoomNeedsModifier: () => !document.documentElement.classList.contains('immersive'),
-				onFrame(bodies, labels, sun) {
+				onFrame(bodies, labels, _sun, pins) {
 					const w = plot.clientWidth;
-					if (cuId) {
-						const p = cuId === 'sun' ? sun : bodies.find((b) => b.key === cuId);
-						if (p) drawCloseup(p);
+					if (cuHost) {
+						const p = bodies.find((b) => b.key === cuHost);
+						lastPins = pins;
+						if (p) drawCloseup(p, pins);
+						// The hover label sits beside the section it names
+						if (cuHost === 'vessel' && shipHover >= 0 && pins[shipHover]) tip.style.translate = `${pins[shipHover].x}px ${pins[shipHover].y}px`;
 					}
-					// The star's hit area takes in some of its glow; its label only shows on hover, so it never crowds the planets'
-					const sunR = Math.max(sun.r * 1.4, 14);
-					sunBtn.style.transform = `translate(${sun.x}px, ${sun.y}px)`;
-					sunBtn.style.setProperty('--r', `${sunR}px`);
-					sunBtn.classList.toggle('flip', sun.x > w * 0.6);
 					// Place labels in priority order (hovered, then nearer and larger planets);
 					// a label that would overlap one already placed fades out until its planet is hovered
 					const priority = (key: string, r: number) => (key === hoveredId ? 1e5 : r);
 					const placed: { l: number; t: number; r: number; b: number }[] = [];
 					for (const b of [...bodies].sort((a, z) => priority(z.key, z.r) - priority(a.key, a.r))) {
-						const btn = buttons.get(b.key)!;
+						const btn = buttons.get(b.key);
+						if (!btn) continue; // Earth has no target yet
 						const r = Math.max(b.r, 6);
 						const flip = b.x > w * 0.6;
 						btn.style.transform = `translate(${b.x}px, ${b.y}px)`;
@@ -544,21 +823,25 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			targetsLayer.addEventListener('focusin', (e) => { hoveredId = targetId(e); scene.setPaused(true); });
 			targetsLayer.addEventListener('focusout', () => { hoveredId = ''; scene.setPaused(false); });
 
-			// Every body on the plot, the home star included, and every register row opens its close-up; each close-up has its own hash
-			const isCloseup = (id: string) => closeups.some((c) => c.id === id);
+			// Every body on the plot, the vessel included, and every register row opens its close-up; each view has its own hash
+			const isCloseup = (key: string) => views.has(key);
 			function goCloseup(id: string, replace = false) {
 				if (replace) history.replaceState(null, '', `#${id}`);
 				else if (location.hash !== `#${id}`) history.pushState(null, '', `#${id}`);
 				route();
 			}
 			buttons.forEach((b) => b.addEventListener('click', () => goCloseup(b.dataset.id!)));
-			sunBtn.addEventListener('click', () => goCloseup('sun'));
 			cu.querySelectorAll<HTMLButtonElement>('.cu-step').forEach((b) => b.addEventListener('click', () => goCloseup(b.dataset.id!, true)));
-			cu.querySelector('.cu-back')!.addEventListener('click', () => goFullView());
+			// Back climbs one level: a site returns to its world, a world or the star to the full system
+			function goBack() {
+				if (cuView?.back) goCloseup(cuView.back, true);
+				else goFullView();
+			}
+			cu.querySelector('.cu-back')!.addEventListener('click', goBack);
 			cuPoints.addEventListener('scroll', measureCloseup, { passive: true });
-			document.fonts?.ready.then(() => { if (cuId) measureCloseup(); });
+			document.fonts?.ready.then(() => { if (cuView) measureCloseup(); });
 			addEventListener('resize', () => {
-				if (!cuId) return;
+				if (!cuView) return;
 				scene.setCloseFrame(cuFrame());
 				measureCloseup();
 			});
@@ -597,8 +880,33 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				closeConsole();
 			}
 
+			// ---------- Inside the command module: its own first-person scene, built the first time it opens ----------
+			const cabinHost = document.querySelector<HTMLElement>('.cabin')!;
+			let cabin: Cabin | null = null;
+			const leaveCabin = () => goCloseup(views.get('VSL-01')!.back, true);
+			function openCabin() {
+				const content: CabinContent = { ...JSON.parse(document.getElementById('cabin-data')!.textContent!), textures: `${import.meta.env.BASE_URL.replace(/\/?$/, '/')}textures/` };
+				cabin ??= createCabin(cabinHost, content, { reduced, onExit: leaveCabin });
+				closeConsole();
+				openCloseup('VSL-01'); // the ship waits outside, held on the module
+				cabin.open();
+				scene.suspend(true);
+			}
+			function closeCabin() {
+				if (!cabin?.isOpen) return;
+				cabin.close();
+				scene.suspend(false);
+			}
+			cu.querySelector('.cu-enter')!.addEventListener('click', () => goCloseup('cabin'));
+			cabinHost.querySelector('.cabin-leave')!.addEventListener('click', leaveCabin);
+
 			function route() {
 				const page = location.hash.slice(1);
+				if (page === 'cabin') {
+					openCabin();
+					return;
+				}
+				closeCabin();
 				if (isCloseup(page)) {
 					closeConsole();
 					openCloseup(page);
@@ -611,8 +919,16 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			addEventListener('hashchange', route);
 			addEventListener('popstate', route);
 			plot.querySelector('.full-view')!.addEventListener('click', goFullView);
-			addEventListener('keydown', (e) => { if (e.key === 'Escape' && (cuId || !root.classList.contains('immersive'))) goFullView(); });
-			if (isCloseup(location.hash.slice(1))) openCloseup(location.hash.slice(1));
+			addEventListener('keydown', (e) => {
+				if (e.key !== 'Escape') return;
+				if (cabin?.isOpen) {
+					// The first Escape only frees the mouse; the next one leaves
+					if (performance.now() - cabin.lockReleasedAt > 300) leaveCabin();
+				} else if (cuView) goBack();
+				else if (!root.classList.contains('immersive')) goFullView();
+			});
+			if (location.hash === '#cabin') openCabin();
+			else if (isCloseup(location.hash.slice(1))) openCloseup(location.hash.slice(1));
 			// Let the first-visit boot finish, then drop its long delays so later openings use their own timing
 			if (root.classList.contains('boot')) setTimeout(() => root.classList.remove('boot'), 2800);
 
@@ -663,12 +979,8 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				pointer-events: none;
 			}
 			.hud.tl { top: 14px; left: 16px; }
-			.hud.bl { bottom: 12px; left: 16px; display: flex; gap: 14px; }
 			.hud.br { bottom: 12px; right: 16px; }
 			.hud-title { font: 400 0.66rem/1.6 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ice); }
-			.key { display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 0; }
-			.key.complete { border: 1.5px solid var(--ice); border-radius: 50%; }
-			.key.flight { background: var(--amber); rotate: 45deg; }
 
 			.targets, .marks { position: absolute; inset: 0; pointer-events: none; }
 			.yr {
@@ -722,14 +1034,10 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.target.tag-hidden .tag { opacity: 0; }
 			.target.tag-hidden:hover .tag, .target.tag-hidden:focus-visible .tag { opacity: 1; }
 			.glyph { display: inline-block; width: 6px; height: 6px; margin-right: 6px; vertical-align: 1px; border: 1.5px solid var(--ice); border-radius: 50%; }
-			.target.flight .glyph { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; }
 			.tag b { font-weight: 600; color: var(--dim); margin-right: 3px; }
 			/* Targets on the right side of the plot put their tag on the left so it never clips */
 			.target.flip .tag { left: auto; right: calc(100% - 4px); border-left: 0; border-right: 1px solid var(--line); }
-			.target.home { cursor: pointer; }
-			.target.home .tag { opacity: 0; pointer-events: none; }
-			.target.home:hover .tag, .target.home:focus-visible .tag { opacity: 1; }
-			.target.home .glyph { border-color: var(--amber); background: var(--amber); }
+			.target.vessel .glyph { border: 0; border-radius: 0; background: var(--amber); rotate: 45deg; }
 			.target:hover .tag, .target:focus-visible .tag { background: rgba(74, 93, 134, 0.7); }
 			.target:focus-visible { outline: none; }
 			.target:focus-visible .marker { border: 2px solid var(--amber); }
@@ -791,7 +1099,7 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			/* Sortie register */
 			.reg-head, .reg-row {
 				display: grid;
-				grid-template-columns: 110px 1.4fr 1fr 90px 110px;
+				grid-template-columns: 110px 1.4fr 1fr 130px 110px;
 				gap: 12px;
 				align-items: center;
 				padding: 0 16px;
@@ -889,7 +1197,6 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.immersive .viewport { display: block; margin: 0; border: 0; box-shadow: none; }
 			.immersive .plot { height: 100vh; height: 100dvh; }
 			.immersive .hud.tl { top: 92px; left: 28px; }
-			.immersive .hud.bl { bottom: 22px; left: 28px; }
 			.immersive .hud.br { bottom: 22px; right: 28px; }
 
 			.immersive .immersive-bar {
@@ -1015,7 +1322,109 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			.cu-label { display: flex; gap: 10px; align-items: baseline; font: 600 0.8rem/1.3 var(--data); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ice); }
 			.cu-label b { font-weight: 600; color: var(--amber); }
 			.cu-text { margin-top: 5px; font-size: 0.95rem; line-height: 1.5; color: #d3dcea; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9); }
-			.cu-title .cu-link { margin-top: 14px; }
+			.cu-title .cu-link, .cu-title .cu-enter { margin-top: 14px; }
+			.cu-title [hidden] { display: none; }
+			.cu-enter { padding: 10px 2px; font-size: 1.05rem; color: var(--amber); background: none; border: 0; cursor: pointer; }
+			.cu-enter:hover, .cu-enter:focus-visible { color: #fff; }
+
+			/* ---------- Inside the command module ---------- */
+			.cabin { position: fixed; inset: 0; z-index: 60; background: #05070d; opacity: 0; transition: opacity 0.5s ease; touch-action: none; user-select: none; }
+			.cabin[hidden] { display: none; }
+			.cabin.open { opacity: 1; }
+			.cabin.fading { opacity: 0; transition-duration: 0.6s; }
+			.cabin-view { position: absolute; inset: 0; cursor: pointer; }
+			.cabin.locked .cabin-view { cursor: none; }
+			/* While the mouse is free, a card in the middle offers to capture it again */
+			.cabin-capture {
+				position: absolute; left: 50%; top: 50%; translate: -50% -50%;
+				display: flex; flex-direction: column; align-items: center; gap: 10px;
+				padding: 20px 28px 18px;
+				font: 600 1.1rem/1.2 var(--data); letter-spacing: 0.08em; text-transform: uppercase; color: #fff;
+				background: rgba(6, 10, 18, 0.72); border: 1px solid rgba(111, 214, 255, 0.55); backdrop-filter: blur(4px);
+				cursor: pointer;
+			}
+			.cabin-capture span { font: 500 0.82rem/1.4 var(--data); letter-spacing: 0.04em; text-transform: none; color: var(--dim); }
+			.cabin-capture kbd { padding: 1px 5px; margin: 0 2px; font: 600 0.7rem/1.2 var(--data); color: var(--ice); border: 1px solid rgba(228, 236, 247, 0.25); }
+			.cabin-capture:hover, .cabin-capture:focus-visible { border-color: var(--amber); }
+			.cabin.locked .cabin-capture, .cabin.leaving .cabin-capture, .cabin.no-lock .cabin-capture { display: none; }
+			.cabin.no-lock .cabin-view { cursor: grab; }
+			.cabin-view canvas { display: block; width: 100%; height: 100%; }
+			.cabin-reticle { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 50%; pointer-events: none; }
+			.cabin-bar { position: absolute; inset: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 28px 40px; background: linear-gradient(rgba(3, 5, 10, 0.7), transparent); pointer-events: none; }
+			.cabin-bar > * { pointer-events: auto; }
+			.cabin-bar p { font: 600 0.85rem/1.2 var(--data); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ice); }
+			.cabin-bar b { font-weight: 600; color: var(--amber); margin-right: 8px; }
+			.cabin-leave { padding: 8px 12px; font: 600 0.85rem/1 var(--data); letter-spacing: 0.06em; color: var(--ice); background: rgba(8, 12, 22, 0.6); border: 1px solid rgba(228, 236, 247, 0.25); cursor: pointer; }
+			.cabin-leave:hover, .cabin-leave:focus-visible { border-color: var(--amber); color: #fff; }
+			.cabin-leave kbd, .cabin-help kbd { padding: 1px 5px; font: 600 0.7rem/1.2 var(--data); color: var(--dim); border: 1px solid rgba(228, 236, 247, 0.25); }
+			.cabin-help { position: absolute; left: 50%; bottom: 24px; translate: -50% 0; max-width: calc(100% - 32px); font: 500 0.9rem/1.5 var(--data); letter-spacing: 0.04em; text-align: center; color: var(--dim); text-shadow: 0 1px 8px #000; pointer-events: none; }
+			.cabin-help kbd { margin-right: 3px; color: var(--ice); }
+			.cabin-help .touch { display: none; }
+			.cabin-prompt { position: absolute; left: 50%; top: 62%; translate: -50% 0; padding: 9px 16px 8px; font: 600 0.95rem/1.2 var(--data); letter-spacing: 0.06em; color: #fff; background: rgba(8, 12, 22, 0.72); border: 1px solid rgba(95, 210, 138, 0.7); opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+			.cabin-prompt.on { opacity: 1; pointer-events: auto; cursor: pointer; }
+			.cabin-prompt kbd { padding: 1px 6px; margin: 0 3px; font: 600 0.8rem/1.2 var(--data); color: #fff; border: 1px solid rgba(95, 210, 138, 0.8); }
+			.cabin-prompt .touch { display: none; }
+			.cabin-pad { position: absolute; left: 24px; bottom: 72px; display: none; grid-template: 'x f y' 54px 'l b r' 54px / 54px 54px 54px; gap: 6px; }
+			.cabin-pad button { font-size: 1.1rem; color: var(--ice); background: rgba(8, 12, 22, 0.55); border: 1px solid rgba(228, 236, 247, 0.3); touch-action: none; }
+			@media (hover: none) and (pointer: coarse) {
+				.cabin-pad { display: grid; }
+				.cabin-capture { display: none; }
+				.cabin-prompt .keys { display: none; }
+				.cabin-prompt .touch { display: inline; }
+				.cabin-help .keys { display: none; }
+				.cabin-help .touch { display: inline; }
+				.cabin-help { bottom: 16px; font-size: 0.8rem; }
+				.cabin-prompt { white-space: normal; text-align: center; width: max-content; max-width: calc(100% - 32px); }
+				.cabin-bar { padding: 14px 16px 32px; }
+			}
+			/* A world lists its sites; each entry opens that site */
+			.cu-go {
+				display: block;
+				width: 100%;
+				padding: 3px 0 3px 9px;
+				text-align: left;
+				font: inherit;
+				color: inherit;
+				background: none;
+				border: 0;
+				border-left: 1px solid transparent;
+				cursor: pointer;
+				transition: background-color 0.15s, border-color 0.15s;
+			}
+			.cu-go:hover, .cu-go:focus-visible { background: rgba(228, 236, 247, 0.06); border-left-color: var(--amber); outline: none; }
+			.cu-go:hover .cu-label { color: #fff; }
+
+			/* Sites pinned to the held world's surface, placed every frame */
+			.cu-pins { position: absolute; inset: 0; pointer-events: none; }
+			.cu-pin {
+				position: absolute;
+				left: 0; top: 0;
+				width: 26px; height: 26px;
+				margin: -13px 0 0 -13px;
+				display: grid;
+				place-items: center;
+				padding: 0;
+				font: 600 0.8rem/1 var(--data);
+				color: var(--ice);
+				background: rgba(8, 12, 22, 0.6);
+				border: 1px solid rgba(228, 236, 247, 0.75);
+				border-radius: 50%;
+				backdrop-filter: blur(2px);
+				cursor: pointer;
+				pointer-events: auto;
+				opacity: 0;
+				scale: 0.6;
+				transition: opacity 0.3s, scale 0.3s, color 0.15s, background-color 0.15s, border-color 0.15s;
+				will-change: translate;
+			}
+			.cu-pin::after { content: ''; position: absolute; inset: -6px; border: 1px solid var(--amber); border-radius: 50%; opacity: 0; pointer-events: none; }
+			.ready .cu-pin { opacity: 1; scale: 1; }
+			.ready .cu-pin::after { animation: cu-ping 2.6s ease-out infinite; }
+			.cu-pin:hover, .cu-pin:focus-visible { color: #fff; border-color: var(--amber); outline: none; }
+			.cu-pin.on { color: #0b0f18; background: var(--amber); border-color: var(--amber); scale: 1.15; }
+			.ready .cu-pin.dim { opacity: 0.5; }
+			.cu-pin.dim::after { display: none; }
+			.cu-pin.behind { opacity: 0 !important; pointer-events: none; }
 
 			/* Text arrives once the camera does: title first, then each callout after its leader */
 			.cu-title > *, .cu-point { opacity: 0; translate: -10px 0; transition: opacity 0.25s, translate 0.25s; }
@@ -1055,6 +1464,36 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 			/* Narrow screens: the body sits on top, the text scrolls in a sheet below it, and the leaders drop out */
 			.closeup.narrow::before { background: linear-gradient(0deg, rgba(3, 5, 10, 0.9) 0%, rgba(3, 5, 10, 0.7) 55%, transparent 72%), linear-gradient(180deg, rgba(3, 5, 10, 0.6), transparent 22%); }
 			.closeup.narrow .cu-leaders { display: none; }
+			.closeup.vessel .cu-pin, .closeup.vessel .cu-reticle { display: none; }
+			/* Hull detail fills the frame aboard the vessel, so the text side gets a deeper scrim */
+			.closeup.vessel:not(.narrow)::before {
+				background:
+					linear-gradient(270deg, rgba(3, 5, 10, 0.94) 0%, rgba(3, 5, 10, 0.78) 30%, rgba(3, 5, 10, 0.3) 52%, transparent 64%),
+					linear-gradient(180deg, rgba(3, 5, 10, 0.7), transparent 30%),
+					linear-gradient(0deg, rgba(3, 5, 10, 0.55), transparent 16%);
+			}
+			.plot.ship-hover { cursor: pointer; }
+			.cu-hint { margin-top: 12px; font: 500 0.86rem/1.4 var(--data); letter-spacing: 0.04em; color: var(--amber); }
+			.cu-hint:empty { display: none; }
+			.cu-tip {
+				position: absolute;
+				left: 0; top: 0;
+				margin: 0;
+				padding: 7px 12px 6px;
+				font: 600 0.92rem/1.2 var(--data);
+				letter-spacing: 0.05em;
+				white-space: nowrap;
+				color: #fff;
+				background: rgba(8, 12, 22, 0.72);
+				border: 1px solid rgba(242, 177, 59, 0.7);
+				backdrop-filter: blur(3px);
+				transform: translate(18px, -50%);
+				pointer-events: none;
+				opacity: 0;
+				transition: opacity 0.15s;
+			}
+			.cu-tip b { font-weight: 600; color: var(--amber); margin-right: 4px; }
+			.cu-tip.on { opacity: 1; }
 			.closeup.narrow .cu-sheet {
 				display: block;
 				position: absolute;
@@ -1088,7 +1527,6 @@ const tabs = navTabs.map((t) => ({ href: 'href' in t ? t.href : t.hash, label: t
 				.immersive .immersive-bar { padding: 16px 16px 32px; }
 				.immersive-nav a { padding: 8px 9px; font-size: 0.6rem; }
 				.immersive .hud.tl { display: none; }
-				.immersive .hud.bl { bottom: 16px; left: 16px; }
 				.immersive .immersive-hint { bottom: 48px; font-size: 0.8rem; }
 				.plot { height: 360px; }
 				.tag b { display: none; }

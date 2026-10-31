@@ -9,38 +9,42 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { buildVessel, type Bay } from './vessel';
 
-export type Look = 'ice' | 'gas' | 'ocean' | 'rust' | 'moss' | 'moon' | 'amber';
-export type BodySpec = { id: string; year: number; phase: number; look: Look; size: number };
+export type Look = 'eris' | 'mars' | 'saturn' | 'neptune';
+export type BodySpec = { id: string; orbit: number; phase: number; look: Look; size: number };
 export type ScreenPoint = { key: string; x: number; y: number; r: number };
+// A site pinned to the close-up body's surface; front > 0 while it faces the camera
+export type PinPoint = { x: number; y: number; front: number };
+// A close-up's sites: a count to spread over the face the camera sees, or [latitude, longitude] spots on the world's map
+export type Pins = number | [number, number][];
 export type PlotOptions = {
 	reduced: boolean;
-	onFrame: (bodies: ScreenPoint[], labels: ScreenPoint[], sun: ScreenPoint) => void;
+	onFrame: (bodies: ScreenPoint[], labels: ScreenPoint[], sun: ScreenPoint, pins: PinPoint[]) => void;
 	// When true, the wheel only zooms with Ctrl/⌘ held, so the page can still scroll past the plot
 	zoomNeedsModifier: () => boolean;
+	// A crewed vessel on its own inclined orbit; it reports to onFrame and takes close-ups under the id 'vessel',
+	// of the whole ship or of one section (the command module, then each bay)
+	vessel?: { orbit: number; inclination: number; node: number; phase: number; bays: Bay[] };
 };
 // Where a close-up puts its body: x and y as fractions of the frame, r as the body's radius in px
 export type CloseFrame = { x: number; y: number; r: number };
 
-const ORBIT: Record<number, number> = { 2023: 3.4, 2024: 5.2, 2025: 10, 2026: 12.6 };
-const BELT = [6.6, 8.6];
+const BELT = [8.6, 10.6]; // between the rocky worlds and the gas giants
 // Most planets that can cast shadows on each other; must be at least the number of sorties
 const MAX_OCC = 8;
 const AMBER = new THREE.Color('#f2b13b');
 const ICE = new THREE.Color('#e4ecf7');
 const TEX = `${import.meta.env.BASE_URL.replace(/\/?$/, '/')}textures/`;
 
-// Which photo maps dress each kind of world. Tints recolor greyscale or off-palette maps.
-// detail (0 to 1) keeps that share of the map's fine contrast; the rest blends toward its broad colors, for a smoother look.
+// The photo maps that dress each world. detail (0 to 1) keeps that share of the map's fine contrast;
+// the rest blends toward its broad colors, for a smoother look.
 type Surface = { map: string; tint?: string; detail?: number; night?: string; clouds?: string; normal?: string; specular?: string; atmo: string; haze: number };
 const SURFACE: Record<Look, Surface> = {
-	ice: { map: 'neptune.jpg', detail: 1, atmo: '#8fb6f5', haze: 0.6 },
-	gas: { map: 'saturn.jpg', atmo: '#e8d2a8', haze: 0.25 },
-	ocean: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg', normal: 'earth_normal.jpg', specular: 'earth_specular.jpg', atmo: '#5f9cff', haze: 1.4 },
-	rust: { map: 'mars.jpg', detail: 1, atmo: '#e0a080', haze: 0.45 },
-	moss: { map: 'venus_atmosphere.jpg', tint: '#c2dca8', detail: 1, atmo: '#c7d6a8', haze: 0.35 }, // Venus's clouds, tinted green
-	moon: { map: 'eris.jpg', detail: 1, atmo: '#d6dbe4', haze: 0.15 },
-	amber: { map: 'jupiter.jpg', detail: 1, atmo: '#f0b070', haze: 0.4 }, // basketball orange
+	eris: { map: 'eris.jpg', detail: 1, atmo: '#d6dbe4', haze: 0.15 }, // a pale, icy world (Solar System Scope's fictional Eris)
+	mars: { map: 'mars.jpg', detail: 1, atmo: '#e0a080', haze: 0.45 },
+	saturn: { map: 'saturn.jpg', atmo: '#e8d2a8', haze: 0.25 },
+	neptune: { map: 'neptune.jpg', atmo: '#8fb6f5', haze: 0.6 },
 };
 
 // ---------- CPU noise, used to shape rocks ----------
@@ -246,6 +250,8 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 		renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 		renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		renderer.toneMappingExposure = 1;
+		renderer.shadowMap.enabled = true; // only the vessel casts shadows, and only in its close-up
+		renderer.shadowMap.type = THREE.PCFShadowMap;
 		renderer.domElement.setAttribute('aria-hidden', 'true');
 		container.prepend(renderer.domElement);
 	} catch {
@@ -257,11 +263,11 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 	const cache = new Map<string, THREE.Texture>();
 	const blank = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
 	blank.needsUpdate = true;
-	function tex(name: string | undefined, color = true) {
+	function tex(name: string | undefined, color = true, onLoad?: (t: THREE.Texture) => void) {
 		if (!name || !renderer) return blank;
 		const key = `${name}:${color}`;
 		if (!cache.has(key)) {
-			const t = loader.load(TEX + name, () => { if (opts.reduced || !raf) still(); });
+			const t = loader.load(TEX + name, (loaded) => { onLoad?.(loaded); if (opts.reduced || !raf) still(); });
 			t.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
 			t.anisotropy = 8;
 			t.wrapS = THREE.RepeatWrapping; // clouds and the star's surface drift in u, so maps must wrap rather than smear their edge
@@ -270,9 +276,20 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 		return cache.get(key)!;
 	}
 
-	// Real Milky Way panorama, tilted so the band crosses the frame diagonally
+	// Real Milky Way panorama, tilted so the band crosses the frame diagonally. The vessel's metal reflects it.
 	if (renderer) {
-		const sky = tex('milky_way.jpg');
+		const sky = tex('milky_way.jpg', true, (loaded) => {
+			if (!vessel || !renderer) return;
+			const pmrem = new THREE.PMREMGenerator(renderer);
+			const env = pmrem.fromEquirectangular(loaded).texture;
+			pmrem.dispose();
+			for (const mat of vessel.materials) {
+				mat.envMap = env;
+				mat.envMapIntensity = 0.6;
+				mat.envMapRotation.copy(scene.backgroundRotation);
+				mat.needsUpdate = true;
+			}
+		});
 		sky.mapping = THREE.EquirectangularReflectionMapping;
 		scene.background = sky;
 		scene.backgroundIntensity = 1.8;
@@ -281,12 +298,30 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 
 	// ---------- Lighting and star ----------
 	// Standard-material rocks use these; planets light themselves in PLANET_FRAGMENT
-	scene.add(new THREE.AmbientLight('#7d8db0', 0.12));
+	const ambient = new THREE.AmbientLight('#7d8db0', 0.12);
+	scene.add(ambient);
 	const kicker = new THREE.DirectionalLight('#9fb4dc', 0.35);
 	kicker.position.set(0, 0.4, 1);
 	camera.add(kicker);
-	const sunLight = new THREE.PointLight('#fff1dc', 3.4, 0, 0);
+	const sunLight = new THREE.PointLight('#ffe7cc', 3.2, 0, 0);
 	scene.add(sunLight);
+	// In the vessel's close-up its sunlight comes from a directional light instead, which casts shadows
+	const shipSun = new THREE.DirectionalLight('#ffe7cc', 0);
+	shipSun.castShadow = true;
+	const shadowRes = container.clientWidth >= 700 ? 4096 : 1536;
+	shipSun.shadow.mapSize.set(shadowRes, shadowRes);
+	shipSun.shadow.camera.near = 0.05;
+	shipSun.shadow.camera.far = 6;
+	Object.assign(shipSun.shadow.camera, { left: -0.62, right: 0.62, top: 0.62, bottom: -0.62 });
+	shipSun.shadow.bias = -0.0004;
+	shipSun.shadow.normalBias = 0.0015;
+	shipSun.shadow.radius = 2;
+	shipSun.shadow.autoUpdate = false;
+	shipSun.shadow.needsUpdate = true; // draw the map once, so shadow samplers never see a placeholder texture
+	scene.add(shipSun, shipSun.target);
+	// A cool rim light from behind the vessel picks out its silhouette against the dark, as a film set would
+	const rimLight = new THREE.DirectionalLight('#8fb0ff', 0);
+	scene.add(rimLight, rimLight.target);
 
 	const sunUniforms = { uTime: { value: 0 }, uMap: { value: tex('sun.jpg') } };
 	const sun = new THREE.Mesh(
@@ -301,27 +336,32 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 					vec3 photo = texture2D(uMap, vUv + vec2(uTime * 0.002, 0.0)).rgb;
 					float n = fbm(vPos * 2.6 + vec3(0.0, uTime * 0.06, uTime * 0.03));
 					float g = fbm(vPos * 9.0 - vec3(uTime * 0.05));
-					vec3 col = mix(photo * vec3(1.0, 0.95, 0.85), vec3(1.0, 0.94, 0.82), 0.45 + smoothstep(0.45, 0.8, n) * 0.35);
+					// An unfamiliar star: a little cooler and dimmer than the Sun
+					vec3 col = mix(photo * vec3(1.0, 0.9, 0.74), vec3(1.0, 0.87, 0.68), 0.45 + smoothstep(0.45, 0.8, n) * 0.35);
 					col *= 0.8 + g * 0.5;
 					float limb = 0.4 + 0.6 * pow(max(dot(vN, vV), 0.0), 0.5);
-					gl_FragColor = vec4(col * limb * 2.4, 1.0);
+					gl_FragColor = vec4(col * limb * 1.5, 1.0);
 				}
 			`,
 		}),
 	);
 	scene.add(sun);
 
-	const coronaTex = radialTexture([[0, 'rgba(255,244,220,1)'], [0.12, 'rgba(255,196,110,0.75)'], [0.35, 'rgba(242,177,59,0.18)'], [1, 'rgba(242,177,59,0)']]);
-	for (const [scale, opacity] of [[5, 0.7], [13, 0.1]] as const) {
+	const coronaTex = radialTexture([[0, 'rgba(255,236,206,1)'], [0.12, 'rgba(255,184,104,0.7)'], [0.35, 'rgba(236,160,64,0.16)'], [1, 'rgba(236,160,64,0)']]);
+	for (const [scale, opacity] of [[4.2, 0.42], [11, 0.06]] as const) {
 		const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity }));
 		s.scale.setScalar(scale);
 		scene.add(s);
 	}
 
 	// ---------- Radar disc: sweep wedge and bearing ticks on the orbital plane ----------
-	const sweepUniforms = { uSweep: { value: -Math.PI / 2 }, uR: { value: ORBIT[2026] + 0.6 }, uAmber: { value: AMBER }, uIce: { value: ICE }, uFade: { value: 1 } };
+	const OUTER = Math.max(...specs.map((s) => s.orbit));
+	// The overview pulls back until the second orbit from the outside fits; the outermost runs past the frame edges
+	const sorted = [...new Set(specs.map((s) => s.orbit))].sort((a, z) => a - z);
+	const FIT = (sorted.length > 1 ? sorted[sorted.length - 2] : OUTER) + 0.6;
+	const sweepUniforms = { uSweep: { value: -Math.PI / 2 }, uR: { value: OUTER + 0.6 }, uAmber: { value: AMBER }, uIce: { value: ICE }, uFade: { value: 1 } };
 	const disc = new THREE.Mesh(
-		new THREE.PlaneGeometry(32, 32),
+		new THREE.PlaneGeometry((OUTER + 1.6) * 2, (OUTER + 1.6) * 2),
 		new THREE.ShaderMaterial({
 			uniforms: sweepUniforms,
 			transparent: true,
@@ -351,9 +391,10 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 	disc.rotation.x = -Math.PI / 2;
 	scene.add(disc);
 
+	let vesselOrbit: THREE.Line | null = null; // the vessel's dashed orbit, set up with the vessel below
 	// ---------- Orbits: brighter on the near side for depth ----------
 	const orbits = new Map<number, THREE.LineLoop>();
-	for (const [year, r] of Object.entries(ORBIT)) {
+	for (const r of new Set(specs.map((s) => s.orbit))) {
 		const n = 256;
 		const pos = new Float32Array(n * 3);
 		const col = new Float32Array(n * 4);
@@ -366,7 +407,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 		geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 		geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
 		const line = new THREE.LineLoop(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, color: ICE.clone() }));
-		orbits.set(Number(year), line);
+		orbits.set(r, line);
 		scene.add(line);
 	}
 
@@ -426,15 +467,15 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 	type Body = BodySpec & {
 		orbit: number; angle: number; speed: number; pivot: THREE.Group; spin: THREE.Mesh;
 		mat: THREE.ShaderMaterial; atmo: THREE.ShaderMaterial; ring?: { mesh: THREE.Mesh; mat: THREE.ShaderMaterial; inner: number; outer: number };
-		view: THREE.Vector3; scale: number;
+		view: THREE.Vector3; scale: number; tilt: THREE.Group; lean: number;
 	};
 	const ringTex = tex('saturn_ring.png');
 	const bodies: Body[] = specs.map((s, index) => {
 		const surf = SURFACE[s.look];
-		const orbit = ORBIT[s.year];
+		const orbit = s.orbit;
 		const pivot = new THREE.Group();
 		const tilt = new THREE.Group();
-		tilt.rotation.z = s.look === 'gas' ? 0.3 : rand(-0.4, 0.4);
+		tilt.rotation.z = s.look === 'saturn' ? 0.3 : rand(-0.4, 0.4);
 		pivot.add(tilt);
 
 		const inner = s.size * 1.25, outer = s.size * 2.3;
@@ -451,7 +492,7 @@ export function createPlot(container: HTMLElement, specs: BodySpec[], opts: Plot
 				uHasNormal: { value: surf.normal ? 1 : 0 },
 				uHasSpec: { value: surf.specular ? 1 : 0 },
 				uDetail: { value: surf.detail ?? 1 },
-				uHasRing: { value: s.look === 'gas' ? 1 : 0 },
+				uHasRing: { value: s.look === 'saturn' ? 1 : 0 },
 				uRingIn: { value: inner },
 				uRingOut: { value: outer },
 				uRingCenter: { value: new THREE.Vector3() },
@@ -486,10 +527,10 @@ ${PLANET_FRAGMENT}`,
 			depthWrite: false,
 			blending: THREE.AdditiveBlending,
 		});
-		tilt.add(new THREE.Mesh(new THREE.SphereGeometry(s.size * (s.look === 'ocean' ? 1.06 : 1.04), 64, 32), atmo));
+		tilt.add(new THREE.Mesh(new THREE.SphereGeometry(s.size * 1.04, 64, 32), atmo));
 
 		let ring: Body['ring'];
-		if (s.look === 'gas') {
+		if (s.look === 'saturn') {
 			const ringMat = new THREE.ShaderMaterial({
 				uniforms: {
 					uTex: { value: ringTex }, uIn: { value: inner }, uOut: { value: outer },
@@ -529,8 +570,46 @@ ${PLANET_FRAGMENT}`,
 		}
 
 		scene.add(pivot);
-		return { ...s, orbit, angle: s.phase, speed: 0.2 / Math.pow(orbit, 1.5), pivot, spin, mat, atmo, ring, view: new THREE.Vector3(), scale: 1 };
+		return { ...s, orbit, angle: s.phase, speed: 0.2 / Math.pow(orbit, 1.5), pivot, spin, mat, atmo, ring, view: new THREE.Vector3(), scale: 1, tilt, lean: tilt.rotation.z };
 	});
+
+	// ---------- The vessel: its own orbit, tilted out of the planets' plane ----------
+	const vo = opts.vessel;
+	const vessel = vo && renderer ? buildVessel(vo.bays) : null;
+	// The orbit's plane: u runs along the line of nodes, v completes it, and n is its upward normal
+	const vu = new THREE.Vector3(), vv = new THREE.Vector3(), vn = new THREE.Vector3();
+	let vAngle = 0, vScale = 1, ringGoal = 0, shipLight = 0;
+	let vSection = -1; // in the vessel's close-up, the section the camera holds, or -1 for the whole ship
+	let shadowSpan = 0;
+	if (vo) {
+		const ci = Math.cos(vo.inclination), si = Math.sin(vo.inclination);
+		vu.set(Math.cos(vo.node), 0, Math.sin(vo.node));
+		vv.set(-Math.sin(vo.node) * ci, si, Math.cos(vo.node) * ci);
+		vn.crossVectors(vv, vu);
+		vAngle = vo.phase;
+		const n = 256;
+		const pts = Array.from({ length: n + 1 }, (_, i) => {
+			const a = (i / n) * Math.PI * 2;
+			return vu.clone().multiplyScalar(Math.cos(a) * vo.orbit).addScaledVector(vv, Math.sin(a) * vo.orbit);
+		});
+		const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: ICE, dashSize: 0.32, gapSize: 0.22, transparent: true, opacity: 0.32, depthWrite: false }));
+		line.computeLineDistances();
+		vesselOrbit = line;
+		scene.add(line);
+	}
+	if (vessel) scene.add(vessel.root);
+	const vTan = new THREE.Vector3(), vX = new THREE.Vector3(), vBasis = new THREE.Matrix4();
+	function placeVessel() {
+		if (!vessel || !vo) return;
+		const c = Math.cos(vAngle), s = Math.sin(vAngle);
+		vessel.root.position.copy(vu).multiplyScalar(c * vo.orbit).addScaledVector(vv, s * vo.orbit);
+		// Bow along the direction of travel, dorsal side toward the orbit's normal
+		vTan.copy(vu).multiplyScalar(-s).addScaledVector(vv, c);
+		vX.crossVectors(vn, vTan);
+		vessel.root.quaternion.setFromRotationMatrix(vBasis.makeBasis(vX, vn, vTan));
+		vessel.root.scale.setScalar(vScale);
+	}
+	placeVessel();
 
 	// ---------- Post ----------
 	// HDR chain: scene (with depth) -> focus blur -> light rays + lens streak -> bloom -> tone map -> film
@@ -661,6 +740,10 @@ ${PLANET_FRAGMENT}`,
 	let azGoal = 0, elGoal = 0, steer = 0; // seconds left to swing the camera toward its goal angles
 	let shiftX = 0, shiftY = 0; // view offset in px: moves the focus point away from the frame center
 	let fade = 0; // 0 in the overview, 1 in a close-up; dims the radar disc and orbits
+	const pinDirs: THREE.Vector3[] = []; // world-space directions from the close-up body's center to its sites
+	const pinLocal: THREE.Vector3[] = []; // or, for sites on a map, their directions in the surface's own frame
+	let spinGoal: number | null = null; // a mapped world turns so its sites face the camera
+	const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 	function placeCamera(t: number, k: number) {
 		focus.lerp(focusGoal, k);
@@ -676,7 +759,7 @@ ${PLANET_FRAGMENT}`,
 		camera.updateMatrixWorld();
 	}
 
-	// Pull back only until the 2025 orbit fits; the outer orbit runs past the frame edges for a closer view
+	// Pull back only until the FIT orbit fits; the outer orbit runs past the frame edges for a closer view
 	function fitCamera() {
 		const narrow = W / H < 1.2;
 		const oldElev = elev;
@@ -693,7 +776,7 @@ ${PLANET_FRAGMENT}`,
 			let ok = true;
 			for (let i = 0; i < 16 && ok; i++) {
 				const a = (i / 16) * Math.PI * 2;
-				probe.set(Math.cos(a) * 10.6, 0, Math.sin(a) * 10.6).project(camera);
+				probe.set(Math.cos(a) * FIT, 0, Math.sin(a) * FIT).project(camera);
 				ok = Math.abs(probe.x) < 0.94 && Math.abs(probe.y) < 0.8;
 			}
 			if (ok) break;
@@ -800,7 +883,7 @@ ${PLANET_FRAGMENT}`,
 	}
 
 	// ---------- Frame ----------
-	const tmp = new THREE.Vector3(), sunView = new THREE.Vector3(), nrm = new THREE.Vector3(), SUN_AT = new THREE.Vector3();
+	const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmp3 = new THREE.Vector3(), sunView = new THREE.Vector3(), nrm = new THREE.Vector3(), SUN_AT = new THREE.Vector3();
 	const tanHalf = () => Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 	let sweep = -Math.PI / 2;
 	let exposure = 1;
@@ -814,18 +897,36 @@ ${PLANET_FRAGMENT}`,
 		for (const b of bodies) {
 			if (!paused && !closeId) b.angle += dt * b.speed;
 			b.pivot.position.set(Math.cos(b.angle) * b.orbit, 0, Math.sin(b.angle) * b.orbit);
-			b.spin.rotation.y += dt * 0.05;
+			// A close-up holds still so its pins stay put; a mapped world first turns its sites to the camera and stands upright
+			const turn = k === 1 ? 1 : 1 - Math.exp(-dt * 2);
+			if (b.id !== closeId) b.spin.rotation.y += dt * 0.05;
+			else if (spinGoal !== null) b.spin.rotation.y += wrapAngle(spinGoal - b.spin.rotation.y) * turn;
+			const lean = b.id === closeId && spinGoal !== null ? 0 : b.lean;
+			b.tilt.rotation.z += (lean - b.tilt.rotation.z) * turn;
 			// In a close-up the other planets shrink away so only the chosen one stands out
 			const goal = closeId && b.id !== closeId ? 0.3 : 1;
 			b.scale += (goal - b.scale) * (k === 1 ? 1 : 1 - Math.exp(-dt * 2.5));
 			b.pivot.scale.setScalar(b.scale);
 		}
+		if (vessel && vo) {
+			if (!paused && !closeId) vAngle += (dt * 0.2) / Math.pow(vo.orbit, 1.5);
+			const goal = closeId && closeId !== 'vessel' ? 0.3 : 1;
+			vScale += (goal - vScale) * (k === 1 ? 1 : 1 - Math.exp(-dt * 2.5));
+			placeVessel();
+			// The ring spins for gravity; in its close-up it eases round to where its bays read top to bottom
+			if (closeId === 'vessel') vessel.ring.rotation.z += (ringGoal - vessel.ring.rotation.z) * (k === 1 ? 1 : 1 - Math.exp(-dt * 2));
+			else vessel.ring.rotation.z += dt * 0.09;
+			vessel.update(t, dt, shipLight);
+		}
 
 		const close = bodies.find((b) => b.id === closeId);
 		if (closeId) {
 			// Fly in until the body's radius on screen matches the frame the page asked for
-			focusGoal.copy(close ? close.pivot.position : SUN_AT);
-			const reach = close ? close.size * (close.ring ? 1.9 : 1) : 1.1 * 1.6; // rings and the star's glow need room too
+			const ship = closeId === 'vessel' && vessel;
+			const sec = ship && vSection >= 0 ? vessel.sections[vSection] : null;
+			if (sec) sec.center.getWorldPosition(focusGoal);
+			else focusGoal.copy(ship ? vessel.root.position : close ? close.pivot.position : SUN_AT);
+			const reach = sec ? sec.reach : ship ? vessel.reach : close ? close.size * (close.ring ? 1.9 : 1) : 1.1 * 1.6; // rings and the star's glow need room too
 			zoomGoal = reach / ((closeFrame.r / (H / 2)) * tanHalf()) / fitD;
 		} else {
 			focusGoal.set(0, 0, 0);
@@ -839,6 +940,39 @@ ${PLANET_FRAGMENT}`,
 		shiftX += (shiftGoalX - shiftX) * k;
 		shiftY += (shiftGoalY - shiftY) * k;
 		fade += ((closeId ? 1 : 0) - fade) * (k === 1 ? 1 : 1 - Math.exp(-dt * 3));
+		// Close in on the vessel and the star's light hands over to a shadow-casting directional light aimed at it
+		if (vessel) {
+			shipLight += ((closeId === 'vessel' ? 1 : 0) - shipLight) * (k === 1 ? 1 : 1 - Math.exp(-dt * 2));
+			sunLight.intensity = 3.2 * (1 - 0.85 * shipLight);
+			shipSun.intensity = 3.4 * shipLight;
+			shipSun.shadow.autoUpdate = shipLight > 0.01;
+			// The shadow map covers only what the camera holds, so a single section gets crisp shadows
+			const held = closeId === 'vessel' && vSection >= 0 ? vessel.sections[vSection] : null;
+			const span = held ? held.reach * 2.6 : 0.62;
+			if (Math.abs(span - shadowSpan) > 1e-4) {
+				shadowSpan = span;
+				Object.assign(shipSun.shadow.camera, { left: -span, right: span, top: span, bottom: -span });
+				shipSun.shadow.camera.updateProjectionMatrix();
+			}
+			const lookAt = held ? held.center.getWorldPosition(tmp2) : tmp2.copy(vessel.root.position);
+			tmp.copy(vessel.root.position).normalize();
+			shipSun.target.position.copy(lookAt);
+			shipSun.position.copy(lookAt).addScaledVector(tmp, -3);
+			// Space has no fill light: in the close-up the ambient and camera fill fall away, and a rim light comes up
+			ambient.intensity = 0.12 * (1 - 0.75 * shipLight);
+			kicker.intensity = 0.35 * (1 - 0.8 * shipLight);
+			rimLight.intensity = 1.6 * shipLight;
+			rimLight.target.position.copy(lookAt);
+			rimLight.position.copy(lookAt).addScaledVector(tmp3.copy(lookAt).sub(camera.position).normalize(), 2).addScaledVector(vn, 0.9);
+			// Close-ups of a single section bring the camera within the default near plane
+			const D = fitD * zoom * userZoom;
+			const nearGoal = THREE.MathUtils.clamp(D * 0.04, 0.003, 0.5);
+			if (Math.abs(nearGoal - camera.near) / camera.near > 0.03) {
+				camera.near = nearGoal;
+				camera.updateProjectionMatrix();
+				if (dof) dof.uniforms.uNear.value = nearGoal;
+			}
+		}
 		// Swing the camera to the angle a close-up (or the overview) wants; a drag takes over at once
 		if (steer > 0 && !dragging) {
 			const s = k === 1 ? 1 : 1 - Math.exp(-dt * 2.2);
@@ -880,12 +1014,17 @@ ${PLANET_FRAGMENT}`,
 		}
 
 		sweepUniforms.uFade.value = 1 - fade;
-		orbits.forEach((line, year) => {
+		orbits.forEach((line, r) => {
 			const mat = line.material as THREE.LineBasicMaterial;
-			mat.color.copy(close?.year === year ? AMBER : ICE);
+			mat.color.copy(close?.orbit === r ? AMBER : ICE);
 			mat.opacity = 1 - 0.75 * fade;
 			line.rotation.y = camAz; // keep the brighter half of each ring on the side nearest the camera
 		});
+		if (vesselOrbit) {
+			const mat = vesselOrbit.material as THREE.LineDashedMaterial;
+			mat.color.copy(closeId === 'vessel' ? AMBER : ICE);
+			mat.opacity = 0.32 * (1 - 0.75 * fade);
+		}
 
 		// Lens: focus on the close-up body, aim rays at the star, and let exposure adapt to how much star is in frame
 		tmp.set(0, 0, 0).project(camera);
@@ -914,15 +1053,138 @@ ${PLANET_FRAGMENT}`,
 	}
 
 	const labelPoints = [
-		...Object.entries(ORBIT).map(([year, r]) => ({ key: year, p: new THREE.Vector3(r + 0.35, 0, 0) })),
 		{ key: 'belt', p: new THREE.Vector3(0, 0, BELT[1] + 0.35) },
 	];
+	const pinAt = new THREE.Vector3(), toCam = new THREE.Vector3(), nrmAt = new THREE.Vector3();
 	function report() {
+		const host = bodies.find((b) => b.id === closeId);
+		const pin = (normal: THREE.Vector3) => {
+			const p = toScreen(pinAt, '', 0);
+			return { x: p.x, y: p.y, front: normal.dot(toCam.copy(camera.position).sub(pinAt).normalize()) };
+		};
+		const pins = closeId === 'vessel' && vessel
+			? vessel.sections.map((sec) => {
+				const p = toScreen(sec.anchor.getWorldPosition(pinAt), '', 0);
+				return { x: p.x, y: p.y, front: 1 };
+			})
+			: !host ? []
+			: pinLocal.length
+				? pinLocal.map((v) => {
+					// Mapped sites ride the surface, so they follow it as it turns
+					pinAt.copy(v).multiplyScalar(host.size).applyMatrix4(host.spin.matrixWorld);
+					return pin(nrmAt.copy(pinAt).sub(host.pivot.position).normalize());
+				})
+				: pinDirs.map((d) => {
+					pinAt.copy(host.pivot.position).addScaledVector(d, host.size * host.scale);
+					return pin(d);
+				});
 		opts.onFrame(
-			bodies.map((b) => toScreen(b.pivot.position, b.id, b.size * b.scale)),
+			[
+				...bodies.map((b) => toScreen(b.pivot.position, b.id, b.size * b.scale)),
+				...(vessel ? [toScreen(vessel.root.position, 'vessel', vessel.reach * vScale)] : []),
+			],
 			labelPoints.map((l) => toScreen(l.p, l.key, 0)),
 			toScreen(SUN_AT, 'sun', 1.1),
+			pins,
 		);
+	}
+
+	// A [latitude, longitude] spot as a direction in a sphere's own frame, matching three.js sphere UVs on an equirectangular map
+	function mapDir(lat: number, lon: number) {
+		const phi = THREE.MathUtils.degToRad(lon + 180), theta = THREE.MathUtils.degToRad(90 - lat);
+		return new THREE.Vector3(-Math.cos(phi) * Math.sin(theta), Math.cos(theta), Math.sin(phi) * Math.sin(theta));
+	}
+
+	// Sites given as map spots are pinned there, and the world turns so the middle of their longitudes faces the camera.
+	// A bare count is spread over the face the camera will look at, left of center on the lit side: a sunflower spiral
+	// on a plain world, a wide arc above the rings on a ringed one. Either way the list on the page runs top to bottom.
+	function placePins(b: Body, pins: Pins) {
+		pinDirs.length = 0;
+		pinLocal.length = 0;
+		spinGoal = null;
+		if (Array.isArray(pins)) {
+			for (const [lat, lon] of pins) pinLocal.push(mapDir(lat, lon));
+			// Face the middle of their east-west spread, so the outermost sites sit equally far from either limb
+			const r = THREE.MathUtils.degToRad;
+			const mean = Math.atan2(pins.reduce((a, [, lon]) => a + Math.sin(r(lon)), 0), pins.reduce((a, [, lon]) => a + Math.cos(r(lon)), 0));
+			const offsets = pins.map(([, lon]) => wrapAngle(r(lon) - mean));
+			const mid = mean + (Math.min(...offsets) + Math.max(...offsets)) / 2;
+			// Spinning by psi carries map angle phi to world azimuth phi + psi - 90°, so this brings `mid` round to the camera
+			spinGoal = azGoal + Math.PI / 2 - (mid + Math.PI);
+			return;
+		}
+		const n = pins;
+		if (!n) return;
+		const az = azGoal, el = elev + elGoal;
+		const c = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+		const r = new THREE.Vector3(0, 1, 0).cross(c).normalize();
+		const u = new THREE.Vector3().crossVectors(c, r);
+		const spots = Array.from({ length: n }, (_, i) => {
+			if (b.ring) {
+				// Across the upper face, alternating high and low so neighbours keep their distance;
+				// the low row stays just clear of where the rings cross the disc
+				const f = n > 1 ? i / (n - 1) : 0.5;
+				return { yaw: -1.0 + 1.6 * f, pitch: i % 2 ? 0.32 : 0.82 };
+			}
+			const rr = n === 1 ? 0 : 0.72 * Math.sqrt((i + 0.5) / n), t = i * 2.39996; // a lone site sits mid-face
+			return { yaw: -0.2 + rr * Math.cos(t), pitch: 0.05 + rr * Math.sin(t) };
+		}).sort((a, z) => z.pitch - a.pitch);
+		for (const { yaw, pitch } of spots) {
+			pinDirs.push(new THREE.Vector3()
+				.addScaledVector(c, Math.cos(yaw) * Math.cos(pitch))
+				.addScaledVector(r, Math.sin(yaw) * Math.cos(pitch))
+				.addScaledVector(u, Math.sin(pitch))
+				.normalize());
+		}
+	}
+
+	// Pick the ring angle at which the close-up camera sees the bays most evenly spread from top to bottom;
+	// the page then lists them in that on-screen order
+	function settleRing(az: number, el: number) {
+		if (!vessel) return;
+		const probe = new THREE.PerspectiveCamera(camera.fov, W / H, 0.01, 100);
+		const D = vessel.reach / ((closeFrame.r / (H / 2)) * tanHalf());
+		const c = vessel.root.position;
+		probe.position.set(c.x + Math.sin(az) * Math.cos(el) * D, c.y + Math.sin(el) * D, c.z + Math.cos(az) * Math.cos(el) * D);
+		probe.lookAt(c);
+		probe.updateMatrixWorld();
+		const start = vessel.ring.rotation.z, p = new THREE.Vector3();
+		let best = start, bestScore = -Infinity;
+		for (let i = 0; i < 180; i++) {
+			const phi = start - Math.PI + (i / 180) * Math.PI * 2;
+			vessel.ring.rotation.z = phi;
+			vessel.root.updateMatrixWorld(true);
+			const ys = vessel.sections.slice(1).map((sec) => sec.anchor.getWorldPosition(p).project(probe).y).sort((a, z) => z - a);
+			let score = Infinity;
+			for (let j = 1; j < ys.length; j++) score = Math.min(score, ys[j - 1] - ys[j]);
+			if (score > bestScore) { bestScore = score; best = phi; }
+		}
+		vessel.ring.rotation.z = start;
+		vessel.root.updateMatrixWorld(true);
+		ringGoal = best;
+	}
+
+	// The camera direction for the vessel's close-up: a three-quarter view from the sunlit side, a little above.
+	// The whole ship is seen mostly side-on so its length reads; a section is seen more from ahead, so its
+	// windows and markings face the camera.
+	function vesselAngles(section: number) {
+		if (!vessel) return { az: 0, el: 0.3 };
+		const toSun = vessel.root.position.clone().negate().normalize();
+		const side = vX.dot(toSun) >= 0 ? vX.clone() : vX.clone().negate();
+		const [s, up, fwd] = section < 0 ? [0.8, 0.42, 0.3] : section === 0 ? [0.62, 0.45, 0.62] : [0.55, 0.42, 0.72];
+		const d = side.multiplyScalar(s).addScaledVector(vn, up).addScaledVector(vTan, fwd).normalize();
+		const az = Math.atan2(d.x, d.z), el = THREE.MathUtils.clamp(Math.asin(d.y), 0.12, 0.62);
+		if (section < 0) settleRing(az, el);
+		else {
+			const ra = vessel.sections[section].ringAngle;
+			if (ra !== undefined) {
+				// Turn the ring so the bay swings round toward the camera
+				const target = Math.atan2(d.dot(vn), d.dot(vX));
+				const cur = vessel.ring.rotation.z;
+				ringGoal = cur + Math.atan2(Math.sin(target - ra - cur), Math.cos(target - ra - cur));
+			}
+		}
+		return { az, el };
 	}
 
 	function render() {
@@ -932,6 +1194,7 @@ ${PLANET_FRAGMENT}`,
 	let last = performance.now();
 	let raf = 0;
 	let inView = true;
+	let suspended = false; // another full-screen scene (the cabin) is showing instead
 	function frame(now: number) {
 		const dt = Math.min((now - last) / 1000, 0.05);
 		last = now;
@@ -940,7 +1203,7 @@ ${PLANET_FRAGMENT}`,
 		raf = requestAnimationFrame(frame);
 	}
 	function start() {
-		if (opts.reduced || raf) return;
+		if (opts.reduced || raf || suspended) return;
 		last = performance.now();
 		raf = requestAnimationFrame(frame);
 	}
@@ -954,7 +1217,7 @@ ${PLANET_FRAGMENT}`,
 	}
 
 	resize();
-	new ResizeObserver(() => { resize(); if (opts.reduced || !inView) still(); }).observe(container);
+	new ResizeObserver(() => { resize(); if ((opts.reduced || !inView) && !suspended) still(); }).observe(container);
 	new IntersectionObserver(([entry]) => {
 		inView = entry.isIntersecting;
 		if (inView) start(); else stop();
@@ -966,11 +1229,28 @@ ${PLANET_FRAGMENT}`,
 		setPaused(p: boolean) {
 			paused = p;
 		},
-		// Fly to one body ('sun' for the star) and hold it at `frame`; an empty id returns to the overview
-		closeup(id: string, frame: CloseFrame) {
+		// Stop drawing altogether while something else covers the screen
+		suspend(on: boolean) {
+			suspended = on;
+			if (on) stop();
+			else if (inView) { start(); if (opts.reduced) still(); }
+		},
+		// Fly to one body ('sun' for the star) and hold it at `frame`, with `pins` sites on its face;
+		// an empty id returns to the overview
+		closeup(id: string, frame: CloseFrame, pins: Pins = 0, section = -1) {
 			Object.assign(closeFrame, frame);
-			if (id === closeId) return;
+			if (id === closeId && (id !== 'vessel' || section === vSection)) return;
+			const reframe = id === closeId; // the vessel stays; the camera moves between the ship and one section
 			closeId = id;
+			vSection = id === 'vessel' ? section : -1;
+			if (reframe) {
+				const { az, el } = vesselAngles(section);
+				azGoal = userAz + Math.atan2(Math.sin(az - userAz), Math.cos(az - userAz));
+				elGoal = el - elev;
+				steer = 3;
+				if (!raf) still();
+				return;
+			}
 			userZoomGoal = 1;
 			panGoal.set(0, 0, 0);
 			const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -981,6 +1261,8 @@ ${PLANET_FRAGMENT}`,
 				const toSun = Math.atan2(-Math.sin(b.angle), -Math.cos(b.angle));
 				az = Math.PI / 2 - (toSun - THREE.MathUtils.degToRad(70));
 				el = b.ring ? 0.24 : 0.12;
+			} else if (id === 'vessel' && vessel) {
+				({ az, el } = vesselAngles(section));
 			} else if (id) {
 				az = userAz;
 				el = 0.22;
@@ -988,10 +1270,29 @@ ${PLANET_FRAGMENT}`,
 			azGoal = userAz + wrap(az - userAz);
 			elGoal = id ? el - elev : 0;
 			steer = 3;
+			if (b) placePins(b, pins);
+			else {
+				pinDirs.length = 0;
+				pinLocal.length = 0;
+				spinGoal = null;
+			}
 			if (!raf) still();
 		},
 		setCloseFrame(frame: CloseFrame) {
 			Object.assign(closeFrame, frame);
+			if (!raf) still();
+		},
+		// The vessel section under a point on the page, or -1; only in the vessel's close-up
+		pickVessel(clientX: number, clientY: number) {
+			if (!vessel || closeId !== 'vessel') return -1;
+			const r = container.getBoundingClientRect();
+			ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+			ray.setFromCamera(ndc, camera);
+			const hits = ray.intersectObjects(vessel.sections.map((sec) => sec.proxy), false);
+			return hits.length ? vessel.sections.findIndex((sec) => sec.proxy === hits[0].object) : -1;
+		},
+		highlightVessel(hover: number, selected: number) {
+			vessel?.highlight(hover, selected);
 			if (!raf) still();
 		},
 	};
